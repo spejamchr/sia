@@ -92,36 +92,37 @@ RSpec.describe Sia do
       }
     end
 
-    it 'uses Sia config' do
-      Sia.options = { buffer_bytes: 1 }
-      expect(new_safe.buffer_bytes).to be(1)
-    end
+    describe 'configuring a safe' do
+      describe 'via hash' do
+        it 'overrides Sia config' do
+          Sia.options = { buffer_bytes: 1 }
+          safe = new_safe
+          safe.options = { buffer_bytes: 10 }
+          expect(safe.buffer_bytes).to be(10)
+        end
 
-    it 'overrides Sia config via config block' do
-      Sia.options = { buffer_bytes: 1 }
-      safe = new_safe
-      safe.config { |s| s.buffer_bytes = 10 }
-      expect(safe.buffer_bytes).to be(10)
-    end
+        it 'does not overwrite Sia config' do
+          Sia.options = { buffer_bytes: 1 }
+          new_safe.options = { buffer_bytes: 10 }
+          expect(Sia.buffer_bytes).to be(1)
+        end
+      end # describe 'via hash'
 
-    it 'overrides Sia config via hash' do
-      Sia.options = { buffer_bytes: 1 }
-      safe = new_safe
-      safe.options = { buffer_bytes: 10 }
-      expect(safe.buffer_bytes).to be(10)
-    end
+      describe 'via block' do
+        it 'overrides Sia config' do
+          Sia.options = { buffer_bytes: 1 }
+          safe = new_safe
+          safe.config { |s| s.buffer_bytes = 10 }
+          expect(safe.buffer_bytes).to be(10)
+        end
 
-    it 'does not overwrite Sia config via config block' do
-      Sia.options = { buffer_bytes: 1 }
-      new_safe.config { |s| s.buffer_bytes = 10 }
-      expect(Sia.buffer_bytes).to be(1)
-    end
-
-    it 'does not overwrite Sia config via hash' do
-      Sia.options = { buffer_bytes: 1 }
-      new_safe.options = { buffer_bytes: 10 }
-      expect(Sia.buffer_bytes).to be(1)
-    end
+        it 'does not overwrite Sia config' do
+          Sia.options = { buffer_bytes: 1 }
+          new_safe.config { |s| s.buffer_bytes = 10 }
+          expect(Sia.buffer_bytes).to be(1)
+        end
+      end # describe 'via block'
+    end # describe 'configuring a safe'
 
     describe 'instance methods' do
       before :each do
@@ -161,6 +162,63 @@ RSpec.describe Sia do
           expect { new_safe(password: 'bad password') }
             .to raise_error(Sia::PasswordError)
         end
+
+        it 'uses Sia config' do
+          Sia.options = { buffer_bytes: 1 }
+          expect(new_safe.buffer_bytes).to be(1)
+        end
+
+        describe 'argument validation' do
+          it 'raises a name and password error with no args' do
+            expect { Sia::Safe.new }.to(
+              raise_error(/name.*password|password.*name/)
+            )
+          end
+
+          it 'raises a name (not password) error when missing name' do
+            expect { Sia::Safe.new(password: 'hi') }.to(
+              raise_error(/^(?>(?:.*?password)?)^.*name.*$/)
+            )
+          end
+
+          it 'raises a password (not name) error when missing password' do
+            expect { Sia::Safe.new(name: 'hi') }.to(
+              raise_error(/^(?>(?:.*?name)?)^.*password.*$/)
+            )
+          end
+        end
+
+        describe 'setting options via hash' do
+          it 'overrides Sia config' do
+            Sia.options = { buffer_bytes: 1 }
+            safe = new_safe(buffer_bytes: 10)
+            expect(safe.buffer_bytes).to be(10)
+          end
+
+          it 'does not overwrite Sia config' do
+            Sia.options = { buffer_bytes: 1 }
+            new_safe(buffer_bytes: 10)
+            expect(Sia.buffer_bytes).to be(1)
+          end
+        end # describe 'setting options via hash'
+
+        describe 'setting options via block' do
+          it 'overrides Sia config' do
+            Sia.options = { buffer_bytes: 1 }
+            safe = new_safe do |s|
+              s.buffer_bytes = 10
+            end
+            expect(safe.buffer_bytes).to be(10)
+          end
+
+          it 'does not overwrite Sia config' do
+            Sia.options = { buffer_bytes: 1 }
+            new_safe do |s|
+              s.buffer_bytes = 10
+            end
+            expect(Sia.buffer_bytes).to be(1)
+          end
+        end # describe 'setting options via hash'
       end # describe '#new'
 
       describe '#close' do

@@ -7,17 +7,18 @@ module Sia
 
     # Initialize a safe
     #
-    # @param [String] name
-    # @param [String] password
-    # @param [Hash] opt
+    # @param [Hash] opt => requires :name and a :password keys
+    #   Also accepts configuration keys.
     # @return [Safe]
     #
-    def initialize(name, password, opt={}, &block)
+    def initialize(**opt, &block)
+      validate_args(opt, required: [:name, :password])
+
       self.options = opt
       config(&block) if block_given?
 
-      @name = name.to_sym
-      @key = Digest::SHA2.digest("#{password}#{salt}")
+      @name = opt[:name].to_sym
+      @key = Digest::SHA2.digest("#{opt[:password]}#{salt}")
 
       check_password if File.directory?(safe_dir)
     end
@@ -97,6 +98,15 @@ module Sia
 
     def defaults
       Sia.options.dup
+    end
+
+    def validate_args(args, **opt)
+      required = Hash[opt[:required].map { |a| [a, args[a]] }]
+      return if required.values.all? { |v| v.is_a?(String) }
+
+      missing = required.select { |k, v| !v || v.empty? }.keys
+
+      raise ArgumentError, "Missing required arg(s): #{missing.join(', ')}"
     end
 
     def persist_safe_dir
