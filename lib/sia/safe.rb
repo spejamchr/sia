@@ -38,17 +38,16 @@ module Sia
       persist_safe_dir
 
       filename = File.expand_path(filename)
-      secure_file = digest_filepath(filename)
 
-      _close(filename, secure_file)
+      _close(filename, digest_filepath(filename))
 
       info = files.fetch(filename, {}).merge(
-        secure_file: secure_file,
+        secure_file: digest_filename(filename),
         last_closed: Time.now,
         safe: true
       )
-      update_entry(:files, files.merge(filename => info))
-      update_entry(:salt, @salt) and @salt = nil unless @salt.nil?
+      update_index(:files, files.merge(filename => info))
+      update_index(:salt, @salt) and @salt = nil unless @salt.nil?
 
       File.delete(filename)
     end
@@ -66,11 +65,11 @@ module Sia
       _open(filename, secure_file)
 
       info = files.fetch(filename, {}).merge(
-        secure_file: secure_file,
+        secure_file: digest_filename(filename),
         last_opened: Time.now,
         safe: false
       )
-      update_entry(:files, files.merge(filename => info))
+      update_index(:files, files.merge(filename => info))
 
       File.delete(secure_file)
     end
@@ -94,7 +93,7 @@ module Sia
     def delete
       files.each do |filename, data|
         next unless data[:safe]
-        File.delete(data[:secure_file])
+        File.delete(digest_filepath(filename))
       end
       FileUtils.rm_rf(safe_dir)
     end
@@ -119,36 +118,34 @@ module Sia
       @safe_dir_persisted = true
     end
 
-    # Provide a copy of the entry file.
-    def entry
-      index.fetch(@name, {}).freeze
-    end
-
     def salt
-      entry.fetch(:salt) { @salt ||= SecureRandom.hex(16) }.freeze
+      index.fetch(:salt) { @salt ||= SecureRandom.hex(16) }.freeze
     end
 
     def files
-      entry.fetch(:files, {}).freeze
+      index.fetch(:files, {}).freeze
     end
 
     def check_password
       files.each do |filename, data|
-        next if digest_filepath(filename) == data[:secure_file]
+        next if digest_filename(filename) == data[:secure_file]
         raise Sia::PasswordError, 'Invalid password'
       end
     end
 
-    def update_entry(k, v)
-      yaml = index.merge(@name => entry.merge(k => v)).to_yaml
+    def update_index(k, v)
+      yaml = index.merge(k => v).to_yaml
       File.write(index_path, yaml)
     end
 
     # Generate a urlsafe filename for storage in the safe
-    def digest_filepath(filename)
-      digest = Digest::SHA2.digest("#{@key}#{@name}#{filename}")
+    def digest_filename(filename)
+      digest = Digest::SHA2.digest("#{@key}#{filename}")
       filename = Base64.urlsafe_encode64(digest, padding: false)
-      File.join(safe_dir, filename)
+    end
+
+    def digest_filepath(filename)
+      File.join(safe_dir, digest_filename(filename))
     end
 
     def _close(clear_file, secure_file)

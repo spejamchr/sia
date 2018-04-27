@@ -143,8 +143,9 @@ RSpec.describe Sia do
         end
 
         it 'does not create the index file' do
-          safe = new_safe
-          expect(safe.send(:entry)).to eq({})
+          FileUtils.rm_rf(new_safe.index_path)
+          new_safe
+          expect(File).to_not exist(new_safe.index_path)
         end
 
         it 'assigns a salt' do
@@ -250,6 +251,16 @@ RSpec.describe Sia do
           after = encrypted_file_count
           expect(after).to be(before + 1)
         end
+
+        it 'creates the index entry for the clear file' do
+          new_safe.close(@clear_file)
+          expect(new_safe.index).to have_key(:files)
+          expect(new_safe.index[:files]).to have_key(@clear_file)
+          expect(new_safe.index[:files][@clear_file]).to have_key(:secure_file)
+          expect(new_safe.index[:files][@clear_file]).to have_key(:last_closed)
+          expect(new_safe.index[:files][@clear_file]).to have_key(:safe)
+          expect(new_safe.index).to have_key(:salt)
+        end
       end # describe '#close'
 
       describe '#open' do
@@ -332,8 +343,8 @@ RSpec.describe Sia do
 
         it 'restores all the secure files to the safe' do
           new_safe.fill
-          new_safe.send(:files).each do |_, data|
-            expect(File).to exist(data[:secure_file])
+          new_safe.send(:files).each do |filename, _|
+            expect(File).to exist(new_safe.send(:digest_filepath, filename))
           end
         end
       end # describe '#empty'
