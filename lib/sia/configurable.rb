@@ -8,54 +8,64 @@ module Sia::Configurable
     buffer_bytes: 512,
   }.freeze
 
-  # Define accessors for each option
-  DEFAULTS.each do |opt, def_val|
-    define_method(opt) { options[opt] }
-    define_method("#{opt}=") { |val| self.options = { opt => val } }
-  end
-  alias_method :config_root_dir, :root_dir
-
+  # Reset the options to default and return the options.
+  #
+  # @return [Struct]
+  #
   def set_default_options!
     @options = defaults
   end
 
+  # The configuration options
+  #
+  # @return [Struct]
+  #
   def options
     @options || set_default_options!
   end
 
+  # Configure your safes with a hash. Returns the options.
+  #
+  #     Sia.options = {
+  #       root_dir: '/path/to/your/safes/'
+  #       index_name: 'my_index.txt'
+  #       buffer_bytes: 2048
+  #     }
+  #
+  # @param [Hash] opt
+  # @return [Struct]
+  #
   def options=(opt)
-    options.merge!(opt.slice(*options.keys))
+    unless opt.is_a? Hash
+      raise ArgumentError, "Expected Hash but got #{opt.class}"
+    end
+
+    opt.each do |k, v|
+      next unless DEFAULTS.keys.include? k.to_sym
+      options.send("#{k}=", v)
+    end
+    options
   end
 
-  # Configure your safes
+  # Configure your safes with a block. Returns the options.
   #
-  #     Sia.config do |s|
-  #       s.root_dir = '/path/to/your/safes/'
-  #       s.index_name = 'my_index.txt'
-  #       s.buffer_bytes = 2048
+  #     Sia.config do |options|
+  #       options.root_dir = '/path/to/your/safes/'
+  #       options.index_name = 'my_index.txt'
+  #       options.buffer_bytes = 2048
   #     end
   #
+  # @return [Struct]
+  #
   def config
-    yield self
-  end
-
-  # The absolute path to the public index file.
-  #
-  def index_path
-    File.join(config_root_dir, index_name).freeze
-  end
-
-  # An index of publicly available information about the safe
-  # @return [Hash] The safes' names, salts, and which files they contain.
-  #
-  def index
-    File.exist?(index_path) ? YAML.load_file(index_path) : {}
+    yield options
+    options
   end
 
   private
 
   def defaults
-    DEFAULTS.dup
+    Struct.new(*DEFAULTS.keys).new(*DEFAULTS.values)
   end
 
 end

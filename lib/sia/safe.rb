@@ -25,10 +25,27 @@ module Sia
 
     # The directory where this safe is stored
     #
+    # @return [String]
+    #
     def safe_dir
-      File.join(root_dir, @name.to_s)
+      File.join(options.root_dir, @name.to_s)
     end
-    alias_method :config_root_dir, :safe_dir
+
+    # The absolute path to the public index file.
+    #
+    # @return [String]
+    #
+    def index_path
+      File.join(safe_dir, options.index_name).freeze
+    end
+
+    # An index of publicly available information about the safe
+    #
+    # @return [Hash] The safes' names, salts, and which files they contain.
+    #
+    def index
+      File.exist?(index_path) ? YAML.load_file(index_path) : {}
+    end
 
     # Secure a file in the safe
     #
@@ -158,7 +175,7 @@ module Sia
           cipher.iv  = iv
 
           w << iv
-          w << cipher.update(r.read(buffer_bytes)) until r.eof?
+          w << cipher.update(r.read(options.buffer_bytes)) until r.eof?
           w << cipher.final
         end
       end
@@ -177,7 +194,7 @@ module Sia
               decipher.iv = r.read(decipher.iv_len)
               first_block = false
             else
-              w << decipher.update(r.read(buffer_bytes))
+              w << decipher.update(r.read(options.buffer_bytes))
             end
           end
         end
