@@ -3,7 +3,7 @@
 module Sia::Configurable
 
   DEFAULTS = {
-    safe_dir: File.join(Dir.home, '.sia_safes').freeze,
+    root_dir: File.join(Dir.home, '.sia_safes').freeze,
     index_name: 'index'.freeze,
     buffer_bytes: 512,
   }.freeze
@@ -13,6 +13,7 @@ module Sia::Configurable
     define_method(opt) { options[opt] }
     define_method("#{opt}=") { |val| self.options = { opt => val } }
   end
+  alias_method :config_root_dir, :root_dir
 
   def set_default_options!
     @options = defaults
@@ -29,20 +30,19 @@ module Sia::Configurable
   # Configure your safes
   #
   #     Sia.config do |s|
-  #       s.safe_dir = '/path/to/your/safes/'
+  #       s.root_dir = '/path/to/your/safes/'
   #       s.index_name = 'my_index.txt'
   #       s.buffer_bytes = 2048
   #     end
   #
   def config
-    options # Make sure options are set
     yield self
   end
 
   # The absolute path to the public index file.
   #
   def index_path
-    File.join(options[:safe_dir], options[:index_name]).freeze
+    File.join(config_root_dir, index_name).freeze
   end
 
   # An index of publicly available information about the safe

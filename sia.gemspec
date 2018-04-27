@@ -9,9 +9,9 @@ Gem::Specification.new do |spec|
   spec.authors       = ["Spencer Christiansen"]
   spec.email         = ["jc.spencer92@gmail.com"]
 
-  spec.summary       = %q{Use safes to encrypt fils}
+  spec.summary       = %q{Encrypting files with digital safes}
   # spec.description   = %q{TODO: Write a longer description or delete this line.}
-  spec.homepage      = "http://www.example.com/" # TODO: Put your gem's website or public repo URL here.
+  spec.homepage      = Sia::HOMEPAGE
   spec.license       = "MIT"
 
   # Prevent pushing this gem to RubyGems.org. To allow pushes either set the 'allowed_push_host'

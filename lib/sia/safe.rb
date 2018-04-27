@@ -23,6 +23,13 @@ module Sia
       check_password if File.directory?(safe_dir)
     end
 
+    # The directory where this safe is stored
+    #
+    def safe_dir
+      File.join(root_dir, @name.to_s)
+    end
+    alias_method :config_root_dir, :safe_dir
+
     # Secure a file in the safe
     #
     # @param [String] filename Relative or absolute path to file to secure
@@ -89,9 +96,7 @@ module Sia
         next unless data[:safe]
         File.delete(data[:secure_file])
       end
-      i = index
-      yaml = i.slice(*(i.keys - [@name])).to_yaml
-      File.write(index_path, yaml)
+      FileUtils.rm_rf(safe_dir)
     end
 
     private
@@ -102,9 +107,8 @@ module Sia
 
     def validate_args(args, **opt)
       required = Hash[opt[:required].map { |a| [a, args[a]] }]
-      return if required.values.all? { |v| v.is_a?(String) }
-
       missing = required.select { |k, v| !v || v.empty? }.keys
+      return if missing.none?
 
       raise ArgumentError, "Missing required arg(s): #{missing.join(', ')}"
     end
@@ -144,7 +148,7 @@ module Sia
     def digest_filepath(filename)
       digest = Digest::SHA2.digest("#{@key}#{@name}#{filename}")
       filename = Base64.urlsafe_encode64(digest, padding: false)
-      File.join(options[:safe_dir], filename)
+      File.join(safe_dir, filename)
     end
 
     def _close(clear_file, secure_file)

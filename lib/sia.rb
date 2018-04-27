@@ -3,7 +3,7 @@ require 'securerandom'
 require 'openssl'
 require 'base64'
 
-require "sia/version"
+require "sia/info"
 require "sia/configurable"
 
 module Sia

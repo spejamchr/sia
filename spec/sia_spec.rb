@@ -15,22 +15,22 @@ RSpec.describe Sia do
     DEFAULTS = Sia::Configurable::DEFAULTS
 
     it 'has defaults set without any configuration' do
-      expect(Sia.safe_dir).to eq(DEFAULTS[:safe_dir])
+      expect(Sia.root_dir).to eq(DEFAULTS[:root_dir])
       expect(Sia.index_name).to eq(DEFAULTS[:index_name])
       expect(Sia.buffer_bytes).to eq(DEFAULTS[:buffer_bytes])
       expect(Sia.index_path).to eq(File.join(
-        DEFAULTS[:safe_dir], DEFAULTS[:index_name]
+        DEFAULTS[:root_dir], DEFAULTS[:index_name]
       ))
     end
 
     describe '#config' do
       it 'respects customizations' do
         Sia.config do |config|
-          config.safe_dir = '/a'
+          config.root_dir = '/a'
           config.index_name = 'b'
           config.buffer_bytes = 1
         end
-        expect(Sia.safe_dir).to eq('/a')
+        expect(Sia.root_dir).to eq('/a')
         expect(Sia.index_name).to eq('b')
         expect(Sia.index_path).to eq('/a/b')
         expect(Sia.buffer_bytes).to eq(1)
@@ -38,10 +38,10 @@ RSpec.describe Sia do
 
       it 'respects partial customizations' do
         Sia.config do |config|
-          config.safe_dir = '/a'
+          config.root_dir = '/a'
           config.buffer_bytes = 1
         end
-        expect(Sia.safe_dir).to eq('/a')
+        expect(Sia.root_dir).to eq('/a')
         expect(Sia.index_name).to eq(DEFAULTS[:index_name])
         expect(Sia.index_path)
           .to eq('/a/' + DEFAULTS[:index_name])
@@ -52,19 +52,19 @@ RSpec.describe Sia do
     describe '#options=' do
       it 'respects customizations' do
         Sia.options = {
-          safe_dir: '/a/b',
+          root_dir: '/a/b',
           index_name: 'c',
           buffer_bytes: 2,
         }
-        expect(Sia.safe_dir).to eq('/a/b')
+        expect(Sia.root_dir).to eq('/a/b')
         expect(Sia.index_name).to eq('c')
         expect(Sia.index_path).to eq('/a/b/c')
         expect(Sia.buffer_bytes).to eq(2)
       end
 
       it 'respects partial customizations' do
-        Sia.options = { safe_dir: '/c' }
-        expect(Sia.safe_dir).to eq('/c')
+        Sia.options = { root_dir: '/c' }
+        expect(Sia.root_dir).to eq('/c')
         expect(Sia.index_name).to eq(DEFAULTS[:index_name])
         expect(Sia.index_path)
           .to eq('/c/' + DEFAULTS[:index_name])
@@ -78,7 +78,7 @@ RSpec.describe Sia do
 
     before :all do
       Sia.config do |c|
-        c.safe_dir = TEST_DIR
+        c.root_dir = TEST_DIR
       end
     end
 
@@ -186,6 +186,10 @@ RSpec.describe Sia do
               raise_error(/^(?>(?:.*?name)?)^.*password.*$/)
             )
           end
+
+          it 'accepts symbols for name and password' do
+            Sia::Safe.new(name: :name, password: :password)
+          end
         end
 
         describe 'setting options via hash' do
@@ -232,6 +236,12 @@ RSpec.describe Sia do
           expect(File).to_not exist(new_safe.index_path)
           new_safe.close(@clear_file)
           expect(File).to exist(new_safe.index_path)
+        end
+
+        it 'creates the safe directory' do
+          expect(File).to_not exist(new_safe.send(:safe_dir))
+          new_safe.close(@clear_file)
+          expect(File).to exist(new_safe.send(:safe_dir))
         end
 
         it 'creates a new encrypted file' do
@@ -335,11 +345,10 @@ RSpec.describe Sia do
       end # describe '#index'
 
       describe '#delete' do
-        it 'removes the index entry for this safe' do
+        it 'removes the safe_dir for this safe' do
           new_safe.close(@clear_file)
-          skip('index does not have :test key') unless Sia.index.has_key?(:test)
           new_safe.delete
-          expect(Sia.index).to_not have_key(:test)
+          expect(File).to_not exist(new_safe.safe_dir)
         end
 
         it 'does not affect open files' do
