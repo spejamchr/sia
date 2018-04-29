@@ -4,6 +4,7 @@ require 'openssl'
 require 'base64'
 
 require "sia/info"
+require "sia/errors"
 require "sia/configurable"
 
 module Sia
@@ -15,5 +16,4 @@ module Sia
   end # class << self
 end
 
-require "sia/errors"
 require "sia/safe"

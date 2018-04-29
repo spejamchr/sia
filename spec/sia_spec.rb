@@ -11,33 +11,10 @@ RSpec.describe Sia do
     DEFAULTS = Sia::Configurable::DEFAULTS
 
     it 'has defaults set without any configuration' do
-      expect(Sia.options.root_dir).to eq(DEFAULTS[:root_dir])
-      expect(Sia.options.index_name).to eq(DEFAULTS[:index_name])
-      expect(Sia.options.buffer_bytes).to eq(DEFAULTS[:buffer_bytes])
+      expect(Sia.options[:root_dir]).to eq(DEFAULTS[:root_dir])
+      expect(Sia.options[:index_name]).to eq(DEFAULTS[:index_name])
+      expect(Sia.options[:buffer_bytes]).to eq(DEFAULTS[:buffer_bytes])
     end
-
-    describe '#config' do
-      it 'respects customizations' do
-        Sia.config do |options|
-          options.root_dir = '/a'
-          options.index_name = 'b'
-          options.buffer_bytes = 1
-        end
-        expect(Sia.options.root_dir).to eq('/a')
-        expect(Sia.options.index_name).to eq('b')
-        expect(Sia.options.buffer_bytes).to eq(1)
-      end
-
-      it 'respects partial customizations' do
-        Sia.config do |options|
-          options.root_dir = '/a'
-          options.buffer_bytes = 1
-        end
-        expect(Sia.options.root_dir).to eq('/a')
-        expect(Sia.options.index_name).to eq(DEFAULTS[:index_name])
-        expect(Sia.options.buffer_bytes).to eq(1)
-      end
-    end # describe '#config'
 
     describe '#options=' do
       it 'respects customizations' do
@@ -46,16 +23,22 @@ RSpec.describe Sia do
           index_name: 'c',
           buffer_bytes: 2,
         }
-        expect(Sia.options.root_dir).to eq('/a/b')
-        expect(Sia.options.index_name).to eq('c')
-        expect(Sia.options.buffer_bytes).to eq(2)
+        expect(Sia.options[:root_dir]).to eq('/a/b')
+        expect(Sia.options[:index_name]).to eq('c')
+        expect(Sia.options[:buffer_bytes]).to eq(2)
       end
 
       it 'respects partial customizations' do
         Sia.options = { root_dir: '/c' }
-        expect(Sia.options.root_dir).to eq('/c')
-        expect(Sia.options.index_name).to eq(DEFAULTS[:index_name])
-        expect(Sia.options.buffer_bytes).to eq(DEFAULTS[:buffer_bytes])
+        expect(Sia.options[:root_dir]).to eq('/c')
+        expect(Sia.options[:index_name]).to eq(DEFAULTS[:index_name])
+        expect(Sia.options[:buffer_bytes]).to eq(DEFAULTS[:buffer_bytes])
+      end
+
+      it 'raises error when setting invalid option' do
+        expect {
+          Sia.options = { some_key_not_in_DEFAULTS: 'hi' }
+        }.to(raise_error(Sia::InvalidOptionError))
       end
     end # describe '#options='
   end # describe Sia::Configurable
@@ -64,9 +47,7 @@ RSpec.describe Sia do
     TEST_DIR = File.join(Dir.home, '.test_sia_safes').freeze
 
     before :all do
-      Sia.config do |options|
-        options.root_dir = TEST_DIR
-      end
+      Sia.options = { root_dir: TEST_DIR }
     end
 
     after :each do
@@ -80,35 +61,18 @@ RSpec.describe Sia do
     end
 
     describe 'configuring a safe' do
-      describe 'via hash' do
-        it 'overrides Sia config' do
-          Sia.options = { buffer_bytes: 1 }
-          safe = new_safe
-          safe.options = { buffer_bytes: 10 }
-          expect(safe.options.buffer_bytes).to be(10)
-        end
+      it 'overrides Sia config' do
+        Sia.options = { buffer_bytes: 1 }
+        safe = new_safe
+        safe.options = { buffer_bytes: 10 }
+        expect(safe.options[:buffer_bytes]).to be(10)
+      end
 
-        it 'does not overwrite Sia config' do
-          Sia.options = { buffer_bytes: 1 }
-          new_safe.options = { buffer_bytes: 10 }
-          expect(Sia.options.buffer_bytes).to be(1)
-        end
-      end # describe 'via hash'
-
-      describe 'via block' do
-        it 'overrides Sia config' do
-          Sia.options = { buffer_bytes: 1 }
-          safe = new_safe
-          safe.config { |options| options.buffer_bytes = 10 }
-          expect(safe.options.buffer_bytes).to be(10)
-        end
-
-        it 'does not overwrite Sia config' do
-          Sia.options = { buffer_bytes: 1 }
-          new_safe.config { |options| options.buffer_bytes = 10 }
-          expect(Sia.options.buffer_bytes).to be(1)
-        end
-      end # describe 'via block'
+      it 'does not overwrite Sia config' do
+        Sia.options = { buffer_bytes: 1 }
+        new_safe.options = { buffer_bytes: 10 }
+        expect(Sia.options[:buffer_bytes]).to be(1)
+      end
     end # describe 'configuring a safe'
 
     describe 'instance methods' do
@@ -153,7 +117,7 @@ RSpec.describe Sia do
 
         it 'uses Sia config' do
           Sia.options = { buffer_bytes: 1 }
-          expect(new_safe.options.buffer_bytes).to be(1)
+          expect(new_safe.options[:buffer_bytes]).to be(1)
         end
 
         describe 'argument validation' do
@@ -180,37 +144,19 @@ RSpec.describe Sia do
           end
         end
 
-        describe 'setting options via hash' do
+        describe 'setting options' do
           it 'overrides Sia config' do
             Sia.options = { buffer_bytes: 1 }
             safe = new_safe(buffer_bytes: 10)
-            expect(safe.options.buffer_bytes).to be(10)
+            expect(safe.options[:buffer_bytes]).to be(10)
           end
 
           it 'does not overwrite Sia config' do
             Sia.options = { buffer_bytes: 1 }
             new_safe(buffer_bytes: 10)
-            expect(Sia.options.buffer_bytes).to be(1)
+            expect(Sia.options[:buffer_bytes]).to be(1)
           end
-        end # describe 'setting options via hash'
-
-        describe 'setting options via block' do
-          it 'overrides Sia config' do
-            Sia.options = { buffer_bytes: 1 }
-            safe = new_safe do |options|
-              options.buffer_bytes = 10
-            end
-            expect(safe.options.buffer_bytes).to be(10)
-          end
-
-          it 'does not overwrite Sia config' do
-            Sia.options = { buffer_bytes: 1 }
-            new_safe do |options|
-              options.buffer_bytes = 10
-            end
-            expect(Sia.options.buffer_bytes).to be(1)
-          end
-        end # describe 'setting options via hash'
+        end # describe 'setting options'
       end # describe '#new'
 
       describe '#close' do

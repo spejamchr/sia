@@ -14,7 +14,7 @@ module Sia
     def initialize(**opt, &block)
       validate_args(opt, required: [:name, :password])
 
-      self.options = opt
+      self.options = opt.slice(*defaults.keys)
       config(&block) if block_given?
 
       @name = opt[:name].to_sym
@@ -28,7 +28,7 @@ module Sia
     # @return [String]
     #
     def safe_dir
-      File.join(options.root_dir, @name.to_s)
+      File.join(options[:root_dir], @name.to_s)
     end
 
     # The absolute path to the public index file.
@@ -36,7 +36,7 @@ module Sia
     # @return [String]
     #
     def index_path
-      File.join(safe_dir, options.index_name).freeze
+      File.join(safe_dir, options[:index_name]).freeze
     end
 
     # An index of publicly available information about the safe
@@ -175,7 +175,7 @@ module Sia
           cipher.iv  = iv
 
           w << iv
-          w << cipher.update(r.read(options.buffer_bytes)) until r.eof?
+          w << cipher.update(r.read(options[:buffer_bytes])) until r.eof?
           w << cipher.final
         end
       end
@@ -194,7 +194,7 @@ module Sia
               decipher.iv = r.read(decipher.iv_len)
               first_block = false
             else
-              w << decipher.update(r.read(options.buffer_bytes))
+              w << decipher.update(r.read(options[:buffer_bytes]))
             end
           end
         end

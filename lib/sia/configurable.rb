@@ -10,7 +10,7 @@ module Sia::Configurable
 
   # Reset the options to default and return the options.
   #
-  # @return [Struct]
+  # @return [Hash]
   #
   def set_default_options!
     @options = defaults
@@ -18,7 +18,7 @@ module Sia::Configurable
 
   # The configuration options
   #
-  # @return [Struct]
+  # @return [Hash]
   #
   def options
     @options || set_default_options!
@@ -32,40 +32,42 @@ module Sia::Configurable
   #       buffer_bytes: 2048
   #     }
   #
+  # Allows partial or piecemeal configuration.
+  #
+  #     Sia.options
+  #     # => {:root_dir=>".../.sia_safes", :index_name=>"index", ...}
+  #
+  #     Sia.options = { root_dir: '/new_dir' }
+  #     Sia.options
+  #     # => {:root_dir=>"/new_dir", :index_name=>"index", ...}
+  #
+  #     Sia.options = { index_name: 'my_index' }
+  #     Sia.options
+  #     # => {:root_dir=>"/new_dir", :index_name=>"my_index", ...}
+  #
   # @param [Hash] opt
-  # @return [Struct]
+  # @return [Hash]
   #
   def options=(opt)
-    unless opt.is_a? Hash
-      raise ArgumentError, "Expected Hash but got #{opt.class}"
-    end
-
-    opt.each do |k, v|
-      next unless DEFAULTS.keys.include? k.to_sym
-      options.send("#{k}=", v)
-    end
-    options
-  end
-
-  # Configure your safes with a block. Returns the options.
-  #
-  #     Sia.config do |options|
-  #       options.root_dir = '/path/to/your/safes/'
-  #       options.index_name = 'my_index.txt'
-  #       options.buffer_bytes = 2048
-  #     end
-  #
-  # @return [Struct]
-  #
-  def config
-    yield options
-    options
+    validate(opt)
+    options.merge!(opt)
   end
 
   private
 
+  def validate(opt)
+    unless opt.is_a? Hash
+      raise Sia::ConfigurationError, "Expected Hash but got #{opt.class}"
+    end
+
+    illegals = opt.keys - defaults.keys
+    unless illegals.empty?
+      raise Sia::InvalidOptionError.new(illegals, defaults.keys)
+    end
+  end
+
   def defaults
-    Struct.new(*DEFAULTS.keys).new(*DEFAULTS.values)
+    DEFAULTS.dup
   end
 
 end
