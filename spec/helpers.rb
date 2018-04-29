@@ -11,4 +11,10 @@ module Helpers
   def def_conf
     Sia::Configurable::DEFAULTS
   end
+
+  def encrypted_file_count
+    Dir[File.join(test_dir, '**', '*')].count { |f|
+      File.file?(f) && f != new_safe.index_path && f != new_safe.secret_path
+    }
+  end
 end

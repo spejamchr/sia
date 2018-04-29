@@ -39,6 +39,12 @@ RSpec.describe Sia do
         expect(Sia.options[:buffer_bytes]).to eq(def_conf[:buffer_bytes])
       end
 
+      it 'raises error if index_name and secret_name are equal' do
+        expect { Sia.config(index_name: 'a', secret_name: 'a') }.to(
+          raise_error(Sia::ConfigurationError)
+        )
+      end
+
       it 'raises error when setting invalid option' do
         expect {
           Sia.config(some_key_not_in_def_conf: 'hi')
@@ -49,17 +55,11 @@ RSpec.describe Sia do
 
   describe Sia::Safe do
     before :all do
-      Sia.config(root_dir: test_dir)
+      Sia.config(root_dir: test_dir, digest_iterations: 1)
     end
 
     after :each do
       FileUtils.rm_rf(test_dir)
-    end
-
-    def encrypted_file_count
-      Dir[File.join(test_dir, '**', '*')].count { |f|
-        File.file?(f) && f != new_safe.index_path
-      }
     end
 
     describe 'configuring a safe' do
@@ -108,11 +108,11 @@ RSpec.describe Sia do
         end
 
         it 'assigns a salt' do
-          expect(new_safe.send(:salt)).to be_a(String)
+          expect(new_safe.salt).to be_a(String)
         end
 
         it 'assigns different salts per new instance' do
-          expect(new_safe.send(:salt)).not_to(eq(new_safe.send(:salt)))
+          expect(new_safe.salt).not_to(eq(new_safe.salt))
         end
 
         it 'raises exception with the wrong password if safe already exists' do
@@ -199,7 +199,12 @@ RSpec.describe Sia do
           expect(new_safe.index[:files][@clear_file]).to have_key(:secure_file)
           expect(new_safe.index[:files][@clear_file]).to have_key(:last_closed)
           expect(new_safe.index[:files][@clear_file]).to have_key(:safe)
-          expect(new_safe.index).to have_key(:salt)
+        end
+
+        it 'creates the secret file for the safe' do
+          expect(File).not_to exist(new_safe.secret_path)
+          new_safe.close(@clear_file)
+          expect(File).to exist(new_safe.secret_path)
         end
       end # describe '#close'
 

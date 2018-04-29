@@ -19,6 +19,7 @@ module Sia
 
       @name = name.to_sym
       @key = Digest::SHA2.digest("#{password}#{salt}")
+      @password = password
 
       check_password if File.directory?(safe_dir)
     end
@@ -47,6 +48,23 @@ module Sia
       File.exist?(index_path) ? YAML.load_file(index_path) : {}
     end
 
+    # The absolute path to the secret file, storing the salt and password digest
+    def secret_path
+      File.join(safe_dir, options[:secret_name]).freeze
+    end
+
+    def secrets
+      return unless File.exist?(secret_path)
+      File.read(secret_path).split(':')
+    end
+
+    # A 64-bit salt encoded in binary
+    def salt
+      [
+        secrets ? secrets[0] : @salt ||= SecureRandom.hex(64)
+      ].pack('H*').freeze
+    end
+
     # Secure a file in the safe
     #
     # @param [String] filename Relative or absolute path to file to secure.
@@ -64,7 +82,6 @@ module Sia
         safe: true
       )
       update_index(:files, files.merge(filename => info))
-      update_index(:salt, @salt) and @salt = nil unless @salt.nil?
 
       File.delete(filename)
     end
@@ -116,6 +133,18 @@ module Sia
 
     private
 
+    def password_digest
+      return @password_digest if defined? @password_digest
+      iter = options[:digest_iterations]
+      digest = OpenSSL::Digest::SHA512.new
+      len = digest.digest_length
+      @password_digest =
+        Base64.urlsafe_encode64(
+          OpenSSL::PKCS5.pbkdf2_hmac(@password, salt, iter, len, digest),
+          padding: false
+        )
+    end
+
     # Used by Sia::Configurable
     #
     def defaults
@@ -125,22 +154,32 @@ module Sia
     def persist_safe_dir
       return if @safe_dir_persisted
       FileUtils.mkdir_p(safe_dir) unless File.directory?(safe_dir)
+      if @salt
+        File.write(secret_path, [@salt, password_digest].join(':'))
+        remove_instance_variable(:@salt)
+      end
       @safe_dir_persisted = true
-    end
-
-    def salt
-      index.fetch(:salt) { @salt ||= SecureRandom.hex(16) }.freeze
     end
 
     def files
       index.fetch(:files, {}).freeze
     end
 
+    # Prevent timing attacks
+    # @see http://ruby-doc.org/stdlib-2.0.0/libdoc/openssl/rdoc/OpenSSL/PKCS5.html#module-OpenSSL::PKCS5-label-Important+Note+on+Checking+Passwords
+    #
+    def eql_time_cmp(a, b)
+      return false unless a.length == b.length
+
+      cmp = b.bytes.to_a
+      result = 0
+      a.bytes.each_with_index { |c, i| result |= c ^ cmp[i] }
+      result == 0
+    end
+
     def check_password
-      files.each do |filename, data|
-        next if digest_filename(filename) == data[:secure_file]
-        raise Sia::PasswordError, 'Invalid password'
-      end
+      return if eql_time_cmp(secrets[1], password_digest)
+      raise Sia::PasswordError, 'Invalid password'
     end
 
     def update_index(k, v)
@@ -150,7 +189,7 @@ module Sia
 
     # Generate a urlsafe filename for storage in the safe
     def digest_filename(filename)
-      digest = Digest::SHA2.digest("#{@key}#{filename}")
+      digest = Digest::SHA2.digest(filename)
       filename = Base64.urlsafe_encode64(digest, padding: false)
     end
 
