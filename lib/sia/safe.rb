@@ -7,18 +7,18 @@ module Sia
 
     # Initialize a safe
     #
-    # @param [Hash] opt => requires :name and a :password keys
-    #   Also accepts configuration keys.
+    # @param [to_sym] name
+    # @param [to_s] password
+    # @param [Hash] opt Used to configure the safe
     # @return [Safe]
     #
-    def initialize(**opt, &block)
-      validate_args(opt, required: [:name, :password])
+    def initialize(name:, password:, **opt)
+      validate_options(opt)
+      @options.merge!(opt)
+      @options.freeze
 
-      self.options = opt.slice(*defaults.keys)
-      config(&block) if block_given?
-
-      @name = opt[:name].to_sym
-      @key = Digest::SHA2.digest("#{opt[:password]}#{salt}")
+      @name = name.to_sym
+      @key = Digest::SHA2.digest("#{password}#{salt}")
 
       check_password if File.directory?(safe_dir)
     end
@@ -31,7 +31,7 @@ module Sia
       File.join(options[:root_dir], @name.to_s)
     end
 
-    # The absolute path to the public index file.
+    # The absolute path to the public index file
     #
     # @return [String]
     #
@@ -49,7 +49,7 @@ module Sia
 
     # Secure a file in the safe
     #
-    # @param [String] filename Relative or absolute path to file to secure
+    # @param [String] filename Relative or absolute path to file to secure.
     #
     def close(filename)
       persist_safe_dir
@@ -71,9 +71,8 @@ module Sia
 
     # Extract a file from the safe
     #
-    # @param [String] filename Relative or absolute path to file to extract
-    #
-    # Note: This is the path to the file as it existed before being closed.
+    # @param [String] filename Relative or absolute path to file to extract.
+    #   Note: This is the path to the file as it existed before being closed.
     #
     def open(filename)
       filename = File.expand_path(filename)
@@ -117,16 +116,10 @@ module Sia
 
     private
 
+    # Used by Sia::Configurable
+    #
     def defaults
       Sia.options.dup
-    end
-
-    def validate_args(args, **opt)
-      required = Hash[opt[:required].map { |a| [a, args[a]] }]
-      missing = required.select { |k, v| !v || v.empty? }.keys
-      return if missing.none?
-
-      raise ArgumentError, "Missing required arg(s): #{missing.join(', ')}"
     end
 
     def persist_safe_dir

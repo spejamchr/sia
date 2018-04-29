@@ -1,4 +1,4 @@
-# Sia and individual safes can both be configured using this
+# Sia-wide and Safe-specific configuration
 #
 module Sia::Configurable
 
@@ -8,66 +8,26 @@ module Sia::Configurable
     buffer_bytes: 512,
   }.freeze
 
-  # Reset the options to default and return the options.
-  #
-  # @return [Hash]
-  #
-  def set_default_options!
-    @options = defaults
-  end
-
   # The configuration options
   #
   # @return [Hash]
   #
   def options
-    @options || set_default_options!
-  end
-
-  # Configure your safes with a hash. Returns the options.
-  #
-  #     Sia.options = {
-  #       root_dir: '/path/to/your/safes/'
-  #       index_name: 'my_index.txt'
-  #       buffer_bytes: 2048
-  #     }
-  #
-  # Allows partial or piecemeal configuration.
-  #
-  #     Sia.options
-  #     # => {:root_dir=>".../.sia_safes", :index_name=>"index", ...}
-  #
-  #     Sia.options = { root_dir: '/new_dir' }
-  #     Sia.options
-  #     # => {:root_dir=>"/new_dir", :index_name=>"index", ...}
-  #
-  #     Sia.options = { index_name: 'my_index' }
-  #     Sia.options
-  #     # => {:root_dir=>"/new_dir", :index_name=>"my_index", ...}
-  #
-  # @param [Hash] opt
-  # @return [Hash]
-  #
-  def options=(opt)
-    validate(opt)
-    options.merge!(opt)
+    (@options ||= defaults).dup
   end
 
   private
 
-  def validate(opt)
+  def validate_options(opt)
     unless opt.is_a? Hash
       raise Sia::ConfigurationError, "Expected Hash but got #{opt.class}"
     end
 
-    illegals = opt.keys - defaults.keys
+    illegals = opt.keys - DEFAULTS.keys
     unless illegals.empty?
-      raise Sia::InvalidOptionError.new(illegals, defaults.keys)
+      raise Sia::InvalidOptionError.new(illegals, DEFAULTS.keys)
     end
-  end
-
-  def defaults
-    DEFAULTS.dup
+    options # If nothing is amiss, go ahead and instantiate the options
   end
 
 end

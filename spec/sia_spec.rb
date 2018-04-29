@@ -8,70 +8,78 @@ RSpec.describe Sia do
       Sia.set_default_options!
     end
 
-    DEFAULTS = Sia::Configurable::DEFAULTS
-
     it 'has defaults set without any configuration' do
-      expect(Sia.options[:root_dir]).to eq(DEFAULTS[:root_dir])
-      expect(Sia.options[:index_name]).to eq(DEFAULTS[:index_name])
-      expect(Sia.options[:buffer_bytes]).to eq(DEFAULTS[:buffer_bytes])
+      expect(Sia.options[:root_dir]).to eq(def_conf[:root_dir])
+      expect(Sia.options[:index_name]).to eq(def_conf[:index_name])
+      expect(Sia.options[:buffer_bytes]).to eq(def_conf[:buffer_bytes])
     end
 
-    describe '#options=' do
+    it 'cannot be changed by manipulating options' do
+      before = Sia.options.dup
+      Sia.options.merge!(a: 1, b: 2)
+      expect(Sia.options).to eq(before)
+    end
+
+    describe '#config' do
       it 'respects customizations' do
-        Sia.options = {
+        Sia.config(
           root_dir: '/a/b',
           index_name: 'c',
           buffer_bytes: 2,
-        }
+        )
         expect(Sia.options[:root_dir]).to eq('/a/b')
         expect(Sia.options[:index_name]).to eq('c')
         expect(Sia.options[:buffer_bytes]).to eq(2)
       end
 
       it 'respects partial customizations' do
-        Sia.options = { root_dir: '/c' }
+        Sia.config(root_dir: '/c')
         expect(Sia.options[:root_dir]).to eq('/c')
-        expect(Sia.options[:index_name]).to eq(DEFAULTS[:index_name])
-        expect(Sia.options[:buffer_bytes]).to eq(DEFAULTS[:buffer_bytes])
+        expect(Sia.options[:index_name]).to eq(def_conf[:index_name])
+        expect(Sia.options[:buffer_bytes]).to eq(def_conf[:buffer_bytes])
       end
 
       it 'raises error when setting invalid option' do
         expect {
-          Sia.options = { some_key_not_in_DEFAULTS: 'hi' }
+          Sia.config(some_key_not_in_def_conf: 'hi')
         }.to(raise_error(Sia::InvalidOptionError))
       end
-    end # describe '#options='
+    end # describe '#config'
   end # describe Sia::Configurable
 
   describe Sia::Safe do
-    TEST_DIR = File.join(Dir.home, '.test_sia_safes').freeze
-
     before :all do
-      Sia.options = { root_dir: TEST_DIR }
+      Sia.config(root_dir: test_dir)
     end
 
     after :each do
-      FileUtils.rm_rf(TEST_DIR)
+      FileUtils.rm_rf(test_dir)
     end
 
     def encrypted_file_count
-      Dir[File.join(TEST_DIR, '**', '*')].count { |f|
+      Dir[File.join(test_dir, '**', '*')].count { |f|
         File.file?(f) && f != new_safe.index_path
       }
     end
 
     describe 'configuring a safe' do
       it 'overrides Sia config' do
-        Sia.options = { buffer_bytes: 1 }
-        safe = new_safe
-        safe.options = { buffer_bytes: 10 }
+        Sia.config(buffer_bytes: 1)
+        safe = new_safe(buffer_bytes: 10)
         expect(safe.options[:buffer_bytes]).to be(10)
       end
 
       it 'does not overwrite Sia config' do
-        Sia.options = { buffer_bytes: 1 }
-        new_safe.options = { buffer_bytes: 10 }
+        Sia.config(buffer_bytes: 1)
+        new_safe(buffer_bytes: 10)
         expect(Sia.options[:buffer_bytes]).to be(1)
+      end
+
+      it 'cannot be done by manipulating options' do
+        safe = new_safe
+        before = safe.options.dup
+        safe.options.merge!(a: 1, b: 2)
+        expect(safe.options).to eq(before)
       end
     end # describe 'configuring a safe'
 
@@ -88,9 +96,9 @@ RSpec.describe Sia do
 
       describe '#new' do
         it 'does not create the safe dir' do
-          FileUtils.rm_rf(TEST_DIR)
+          FileUtils.rm_rf(test_dir)
           new_safe
-          expect(File).to_not exist(File.expand_path(TEST_DIR))
+          expect(File).to_not exist(File.expand_path(test_dir))
         end
 
         it 'does not create the index file' do
@@ -104,8 +112,7 @@ RSpec.describe Sia do
         end
 
         it 'assigns different salts per new instance' do
-          expect(new_safe.send(:salt))
-            .not_to(eq(new_safe.send(:salt)))
+          expect(new_safe.send(:salt)).not_to(eq(new_safe.send(:salt)))
         end
 
         it 'raises exception with the wrong password if safe already exists' do
@@ -116,7 +123,7 @@ RSpec.describe Sia do
         end
 
         it 'uses Sia config' do
-          Sia.options = { buffer_bytes: 1 }
+          Sia.config(buffer_bytes: 1)
           expect(new_safe.options[:buffer_bytes]).to be(1)
         end
 
@@ -146,13 +153,13 @@ RSpec.describe Sia do
 
         describe 'setting options' do
           it 'overrides Sia config' do
-            Sia.options = { buffer_bytes: 1 }
+            Sia.config(buffer_bytes: 1)
             safe = new_safe(buffer_bytes: 10)
             expect(safe.options[:buffer_bytes]).to be(10)
           end
 
           it 'does not overwrite Sia config' do
-            Sia.options = { buffer_bytes: 1 }
+            Sia.config(buffer_bytes: 1)
             new_safe(buffer_bytes: 10)
             expect(Sia.options[:buffer_bytes]).to be(1)
           end
