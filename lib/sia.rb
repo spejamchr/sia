@@ -3,9 +3,9 @@ require 'securerandom'
 require 'openssl'
 require 'base64'
 
-require "sia/info"
-require "sia/errors"
-require "sia/configurable"
+require 'sia/info'
+require 'sia/errors'
+require 'sia/configurable'
 
 module Sia
 
@@ -44,8 +44,8 @@ module Sia
 
     # Reset the options to default and return the options
     #
-    #     Sia.config(root_dir: 1, index_name: 2, buffer_bytes: 3)
-    #     # => {:root_dir=>1, :index_name=>2, :buffer_bytes=>3}
+    #     Sia.config(root_dir: 1, index_name: 2)
+    #     # => {:root_dir=>1, :index_name=>2, ...}
     #     Sia.set_default_options!
     #     # => {:root_dir=>"~/.sia_safes", :index_name=>"index", ...}
     #
@@ -67,4 +67,5 @@ module Sia
   end # class << self
 end
 
-require "sia/safe"
+require 'sia/lock'
+require 'sia/safe'

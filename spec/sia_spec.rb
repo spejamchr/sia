@@ -53,6 +53,121 @@ RSpec.describe Sia do
     end # describe '#config'
   end # describe Sia::Configurable
 
+  describe Sia::Lock do
+    describe '#new' do
+      it 'does not throw an error' do
+        new_lock
+      end
+    end
+
+    describe '#encrypt_to_file' do
+      before :each do
+        @secure_file = '/tmp/safe.spec.secure_file.txt'
+        @string = 'some clear string'
+      end
+
+      after :each do
+        File.delete(@secure_file) if File.exist?(@secure_file)
+      end
+
+      it 'creates the secure_file' do
+        expect(File).to_not exist(@secure_file)
+        new_lock.encrypt_to_file(@string, @secure_file)
+        expect(File).to exist(@secure_file)
+      end
+
+      it 'encrypts the secure_file' do
+        new_lock.encrypt_to_file(@string, @secure_file)
+        expect(File.read(@secure_file)).to_not eq(@string)
+      end
+    end # describe '#encrypt_to_file'
+
+    describe '#decrypt_from_file' do
+      before :each do
+        @secure_file = '/tmp/safe.spec.secure_file.txt'
+        @string = 'some clear string'
+        new_lock.encrypt_to_file(@string, @secure_file)
+      end
+
+      after :each do
+        File.delete(@secure_file) if File.exist?(@secure_file)
+      end
+
+      it 'does not delete the secure_file' do
+        new_lock.decrypt_from_file(@secure_file)
+        expect(File).to exist(@secure_file)
+      end
+
+      it 'restores the clear message' do
+        msg = new_lock.decrypt_from_file(@secure_file)
+        expect(msg).to eq(@string)
+      end
+    end # describe '#decrypt_from_file'
+
+    describe '#encrypt' do
+      before :each do
+        @secure_file = '/tmp/safe.spec.secure_file.txt'
+        @clear_file = '/tmp/safe.spec.clear_file.txt'
+        @string = 'some clear string'
+        File.write(@clear_file, @string)
+      end
+
+      after :each do
+        File.delete(@secure_file) if File.exist?(@secure_file)
+        File.delete(@clear_file) if File.exist?(@clear_file)
+      end
+
+      it 'creates the secure_file' do
+        expect(File).to_not exist(@secure_file)
+        new_lock.encrypt(@clear_file, @secure_file)
+        expect(File).to exist(@secure_file)
+      end
+
+      it 'destroys the clear file' do
+        expect(File).to exist(@clear_file)
+        new_lock.encrypt(@clear_file, @secure_file)
+        expect(File).to_not exist(@clear_file)
+      end
+
+      it 'encrypts the secure_file' do
+        new_lock.encrypt(@clear_file, @secure_file)
+        expect(File.read(@secure_file)).to_not eq(@string)
+      end
+    end # describe '#encrypt'
+
+    describe '#decrypt' do
+      before :each do
+        @secure_file = '/tmp/safe.spec.secure_file.txt'
+        @clear_file = '/tmp/safe.spec.clear_file.txt'
+        @string = 'some clear string'
+        File.write(@clear_file, @string)
+        new_lock.encrypt(@clear_file, @secure_file)
+      end
+
+      after :each do
+        File.delete(@secure_file) if File.exist?(@secure_file)
+        File.delete(@clear_file) if File.exist?(@clear_file)
+      end
+
+      it 'destroys the secure_file' do
+        expect(File).to exist(@secure_file)
+        new_lock.decrypt(@clear_file, @secure_file)
+        expect(File).to_not exist(@secure_file)
+      end
+
+      it 'creates the clear file' do
+        expect(File).to_not exist(@clear_file)
+        new_lock.decrypt(@clear_file, @secure_file)
+        expect(File).to exist(@clear_file)
+      end
+
+      it 'decrypts the secure_file' do
+        new_lock.decrypt(@clear_file, @secure_file)
+        expect(File.read(@clear_file)).to eq(@string)
+      end
+    end # describe '#decrypt'
+  end # describe Sia::Lock
+
   describe Sia::Safe do
     before :all do
       Sia.config(root_dir: test_dir, digest_iterations: 1)
@@ -128,24 +243,6 @@ RSpec.describe Sia do
         end
 
         describe 'argument validation' do
-          it 'raises a name and password error with no args' do
-            expect { Sia::Safe.new }.to(
-              raise_error(/name.*password|password.*name/)
-            )
-          end
-
-          it 'raises a name (not password) error when missing name' do
-            expect { Sia::Safe.new(password: 'hi') }.to(
-              raise_error(/^(?>(?:.*?password)?)^.*name.*$/)
-            )
-          end
-
-          it 'raises a password (not name) error when missing password' do
-            expect { Sia::Safe.new(name: 'hi') }.to(
-              raise_error(/^(?>(?:.*?name)?)^.*password.*$/)
-            )
-          end
-
           it 'accepts symbols for name and password' do
             Sia::Safe.new(name: :name, password: :password)
           end
@@ -179,6 +276,12 @@ RSpec.describe Sia do
           expect(File).to exist(new_safe.index_path)
         end
 
+        it 'encrypts the index file' do
+          new_safe.close(@clear_file)
+          expect { YAML.load(File.read(new_safe.index_path)) }
+            .to(raise_error(Psych::SyntaxError))
+        end
+
         it 'creates the safe directory' do
           expect(File).to_not exist(new_safe.send(:safe_dir))
           new_safe.close(@clear_file)
@@ -202,9 +305,9 @@ RSpec.describe Sia do
         end
 
         it 'creates the secret file for the safe' do
-          expect(File).not_to exist(new_safe.secret_path)
+          expect(File).not_to exist(new_safe.salt_path)
           new_safe.close(@clear_file)
-          expect(File).to exist(new_safe.secret_path)
+          expect(File).to exist(new_safe.salt_path)
         end
       end # describe '#close'
 
