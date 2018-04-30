@@ -9,7 +9,7 @@ module Sia
   #
   # Ex:
   #
-  #     lock = Sia::Lock.new('pass', 'salt', 1000, 1_000_000)
+  #     lock = Sia::Lock.new('pass', 'salt', 1_000, 1_000_000)
   #     lock.encrypt_to_file('Hello World!', '/path/to/secure/file')
   #     File.read('/path/to/secure/file')
   #     # => "\u0016\x8A\x88/%\x90\xDF\u007F\xFC@\xCB\t\u001FTp`(\xBF\x8DR\x9E\x91\x8F\xC1FX\x8F7\xF6-+2"
@@ -18,8 +18,8 @@ module Sia
   #
   class Lock
 
-    # The digest to use. Change it once here to change it everywhere
-    DIGEST = OpenSSL::Digest::SHA256
+    # The digest to use. Safes use the length of the digest to make the salt.
+    DIGEST = ::OpenSSL::Digest::SHA256
 
     # @param [String] password
     # @param [String] salt
@@ -125,8 +125,8 @@ module Sia
 
       clear_io
 
-    rescue OpenSSL::Cipher::CipherError
-      raise Sia::PasswordError, 'Invalid password'
+    rescue ::OpenSSL::Cipher::CipherError
+      raise Sia::Error::PasswordError, 'Invalid password'
     end
 
   end # class Lock

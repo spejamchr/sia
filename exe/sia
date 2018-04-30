@@ -53,7 +53,7 @@ def doit(name, method, filepath)
     puts
     help
   end
-rescue Sia::PasswordError
+rescue Sia::Error::PasswordError
   puts "Incorrect Password"
 end
 

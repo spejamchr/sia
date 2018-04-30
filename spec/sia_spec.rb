@@ -22,11 +22,7 @@ RSpec.describe Sia do
 
     describe '#config' do
       it 'respects customizations' do
-        Sia.config(
-          root_dir: '/a/b',
-          index_name: 'c',
-          buffer_bytes: 2,
-        )
+        Sia.config(root_dir: '/a/b', index_name: 'c', buffer_bytes: 2)
         expect(Sia.options[:root_dir]).to eq('/a/b')
         expect(Sia.options[:index_name]).to eq('c')
         expect(Sia.options[:buffer_bytes]).to eq(2)
@@ -41,16 +37,40 @@ RSpec.describe Sia do
 
       it 'raises error if index_name and secret_name are equal' do
         expect { Sia.config(index_name: 'a', secret_name: 'a') }.to(
-          raise_error(Sia::ConfigurationError)
+          raise_error(Sia::Error::ConfigurationError)
         )
       end
 
       it 'raises error when setting invalid option' do
         expect {
           Sia.config(some_key_not_in_def_conf: 'hi')
-        }.to(raise_error(Sia::InvalidOptionError))
+        }.to(raise_error(Sia::Error::InvalidOptionError))
+      end
+
+      it 'raises error when setting option to invalid type' do
+        expect { Sia.config(index_name: 113) }.to(
+          raise_error(Sia::Error::ConfigurationError)
+        )
       end
     end # describe '#config'
+
+    describe '#set_default_options!' do
+      it 'resets options to default' do
+        Sia.config(root_dir: '/a/b', index_name: 'c', buffer_bytes: 2)
+        Sia.set_default_options!
+        expect(Sia.options[:root_dir]).to eq(def_conf[:root_dir])
+        expect(Sia.options[:index_name]).to eq(def_conf[:index_name])
+        expect(Sia.options[:buffer_bytes]).to eq(def_conf[:buffer_bytes])
+      end
+
+      it 'partially resets options to default with args' do
+        Sia.config(root_dir: '/a/b', index_name: 'c', buffer_bytes: 2)
+        Sia.set_default_options!(:root_dir)
+        expect(Sia.options[:root_dir]).to eq(def_conf[:root_dir])
+        expect(Sia.options[:index_name]).to eq('c')
+        expect(Sia.options[:buffer_bytes]).to eq(2)
+      end
+    end
   end # describe Sia::Configurable
 
   describe Sia::Lock do
@@ -234,7 +254,7 @@ RSpec.describe Sia do
           new_safe.close(@clear_file) # persist the good safe by using it
 
           expect { new_safe(password: 'bad password') }
-            .to raise_error(Sia::PasswordError)
+            .to raise_error(Sia::Error::PasswordError)
         end
 
         it 'uses Sia config' do
@@ -455,7 +475,7 @@ RSpec.describe Sia do
         expect(File.read(clear_file2)).to eq(clear_file2_contents)
 
         expect { new_safe(password: 'bad password') }
-          .to raise_error(Sia::PasswordError)
+          .to raise_error(Sia::Error::PasswordError)
 
         new_safe.fill
         new_safe.empty
