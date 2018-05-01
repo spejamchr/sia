@@ -51,6 +51,7 @@ module Sia::Configurable
     salt_name: '.sia_salt'.freeze,
     digest_iterations: 200_000,
     buffer_bytes: 512,
+    in_place: false,
   }.freeze
 
   # The configuration options
@@ -80,19 +81,47 @@ module Sia::Configurable
         tentatives[:salt_name].inspect
     end
 
-    must_be String, opt, :root_dir, :index_name, :salt_name
-    must_be Integer, opt, :digest_iterations, :buffer_bytes
+    validation_for(opt) do
+      klass_of String, :root_dir, :index_name, :salt_name
+      klass_of Integer, :digest_iterations, :buffer_bytes
+      klass_of [TrueClass, FalseClass], :in_place
+
+      not_empty :root_dir, :index_name, :salt_name
+    end
 
     options # If nothing is amiss, go ahead and instantiate the options
   end
 
-  def must_be(klass, opt, *keys)
-    keys.each do |k|
-      next if !opt.has_key?(k) || opt[k].is_a?(klass)
-
-      raise Sia::Error::ConfigurationError,
-        "#{k.inspect} should be a #{klass} but was a #{opt[k].class}"
-    end
+  def validation_for(opt, &block)
+    Validator.new(opt).instance_eval(&block)
   end
 
-end
+  # Validate the options
+  # @private
+  class Validator
+    def initialize(opt)
+      @opt = opt
+    end
+
+    def klass_of(klass, *keys)
+      klasses = Array(klass)
+
+      (keys & @opt.keys).each do |k|
+        case @opt[k]
+        when *klasses then next
+        else
+          raise Sia::Error::ConfigurationError,
+            "#{k.inspect} must be a #{klasses.join(' or ')} " +
+            "but was a #{@opt[k].class}"
+        end
+      end
+    end
+
+    def not_empty(*keys)
+      (keys & @opt.keys).each do |k|
+        next unless @opt[k].empty?
+        raise Sia::Error::ConfigurationError, "#{k.inspect} must not be empty"
+      end
+    end
+  end # class Validator
+end # module Sia::Configurable

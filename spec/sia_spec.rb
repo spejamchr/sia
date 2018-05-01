@@ -11,16 +11,32 @@ RSpec.describe Sia do
     it 'has defaults set without any configuration' do
       expect(Sia.options[:root_dir]).to eq(def_conf[:root_dir])
       expect(Sia.options[:index_name]).to eq(def_conf[:index_name])
+      expect(Sia.options[:salt_name]).to eq(def_conf[:salt_name])
+      expect(Sia.options[:digest_iterations]).to eq(def_conf[:digest_iterations])
       expect(Sia.options[:buffer_bytes]).to eq(def_conf[:buffer_bytes])
+      expect(Sia.options[:in_place]).to eq(def_conf[:in_place])
     end
 
-    it 'cannot be changed by manipulating options' do
+    it 'cannot be changed by manipulating the options object directly' do
       before = Sia.options.dup
       Sia.options.merge!(a: 1, b: 2)
       expect(Sia.options).to eq(before)
     end
 
     describe '#config' do
+      it 'works with all config options' do
+        all_options = {
+          root_dir: 'a',
+          index_name: 'b',
+          salt_name: 'c',
+          digest_iterations: 1,
+          buffer_bytes: 1,
+          in_place: true,
+        }
+        expect(all_options.keys.sort).to eq(def_conf.keys.sort)
+        Sia.config(**all_options)
+      end
+
       it 'respects customizations' do
         Sia.config(root_dir: '/a/b', index_name: 'c', buffer_bytes: 2)
         expect(Sia.options[:root_dir]).to eq('/a/b')
@@ -49,6 +65,12 @@ RSpec.describe Sia do
 
       it 'raises error when setting option to invalid type' do
         expect { Sia.config(index_name: 113) }.to(
+          raise_error(Sia::Error::ConfigurationError)
+        )
+      end
+
+      it 'raises error for blank options' do
+        expect { Sia.config(index_name: '') }.to(
           raise_error(Sia::Error::ConfigurationError)
         )
       end
