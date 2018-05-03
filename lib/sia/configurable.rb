@@ -46,7 +46,7 @@ module Sia::Configurable
   # `:buffer_bytes` - The buffer size to use when reading/writing files.
   #
   DEFAULTS = {
-    root_dir: File.join(Dir.home, '.sia_safes').freeze,
+    root_dir: Pathname("~").expand_path / '.sia_safes',
     index_name: '.sia_index'.freeze,
     salt_name: '.sia_salt'.freeze,
     digest_iterations: 200_000,
@@ -82,11 +82,12 @@ module Sia::Configurable
     end
 
     validation_for(opt) do
-      klass_of String, :root_dir, :index_name, :salt_name
-      klass_of Integer, :digest_iterations, :buffer_bytes
-      klass_of [TrueClass, FalseClass], :in_place
-
       not_empty :root_dir, :index_name, :salt_name
+
+      convert(:root_dir) { |v| Pathname(v).expand_path }
+      convert(:index_name, :salt_name) { |v| v.to_s }
+      convert(:digest_iterations, :buffer_bytes) { |v| v.to_i }
+      convert(:in_place) { |v| !!v }
     end
 
     options # If nothing is amiss, go ahead and instantiate the options
@@ -103,24 +104,20 @@ module Sia::Configurable
       @opt = opt
     end
 
-    def klass_of(klass, *keys)
-      klasses = Array(klass)
-
-      (keys & @opt.keys).each do |k|
-        case @opt[k]
-        when *klasses then next
-        else
-          raise Sia::Error::ConfigurationError,
-            "#{k.inspect} must be a #{klasses.join(' or ')} " +
-            "but was a #{@opt[k].class}"
-        end
-      end
-    end
-
     def not_empty(*keys)
       (keys & @opt.keys).each do |k|
         next unless @opt[k].empty?
         raise Sia::Error::ConfigurationError, "#{k.inspect} must not be empty"
+      end
+    end
+
+    def convert(*keys, &block)
+      (keys & @opt.keys).each do |k|
+        @opt[k] = yield @opt[k]
+      rescue NoMethodError => nme
+        raise Sia::Error::ConfigurationError,
+          "#{k.inspect} was #{nme.args} and could not be converted using " +
+          "`#{nme.name.inspect}`"
       end
     end
   end # class Validator

@@ -19,7 +19,6 @@ module Sia
 
     # Raised when trying to set invalid option(s)
     class InvalidOptionError < ConfigurationError
-
       def initialize(invalids, available)
         msg = <<~MSG
           Got invalid option(s):
@@ -30,8 +29,10 @@ module Sia
 
         super(msg)
       end
-
     end
+
+    # Raised with in-place safes when trying to close a file not in the safe_dir
+    class FileOutsideScopeError < Error; end
 
   end
 end

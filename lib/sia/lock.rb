@@ -19,7 +19,7 @@ module Sia
   class Lock
 
     # The digest to use. Safes use the length of the digest to make the salt.
-    DIGEST = ::OpenSSL::Digest::SHA256
+    DIGEST = OpenSSL::Digest::SHA256
 
     # @param [String] password
     # @param [String] salt
@@ -34,20 +34,20 @@ module Sia
 
     # Used for encrypting the index file from memory
     #
-    # @param [String] string The string to encrypt
-    # @param [String] secure_file Absolute path to the secure file
+    # @param [Pathname] string The string to encrypt
+    # @param [Pathname] secure Absolute path to the secure file
     #
-    def encrypt_to_file(string, secure_file)
-      basic_encrypt(StringIO.new(string), secure_file)
+    def encrypt_to_file(string, secure)
+      secure.open('wb') { |s| basic_encrypt(StringIO.new(string), s) }
     end
 
     # Used for decrypting the index file into memory
     #
-    # @param [String] secure_file Absolute path to the secure file
+    # @param [Pathname] secure Absolute path to the secure file
     # @return [String]
     #
-    def decrypt_from_file(secure_file)
-      basic_decrypt(StringIO.new, secure_file).string
+    def decrypt_from_file(secure)
+      secure.open('rb') { |s| basic_decrypt(StringIO.new, s).string }
     end
 
     # Encrypt a clear file into a secure file, removing the clear file.
@@ -55,12 +55,12 @@ module Sia
     # This is better set up to handle large amounts of data than
     # {#encrypt_to_file}, which has to hold the entire clear string in memory.
     #
-    # @param [String] clear_file Absolute path to the clear file.
-    # @param [String] secure_file Absolute path to the secure file.
+    # @param [Pathname] clear Absolute path to the clear file.
+    # @param [Pathname] secure Absolute path to the secure file.
     #
-    def encrypt(clear_file, secure_file)
-      File.open(clear_file, 'rb') { |r| basic_encrypt(r, secure_file) }
-      File.delete(clear_file)
+    def encrypt(clear, secure)
+      clear.open('rb') { |c| secure.open('wb') { |s| basic_encrypt(c, s) } }
+      clear.delete
     end
 
     # Decrypt a secure file into a clear file, removing the secure file.
@@ -68,12 +68,12 @@ module Sia
     # This is better set up to handle large amounts of data than
     # {#decrypt_from_file}, which has to hold the entire clear string in memory.
     #
-    # @param [String] clear_file Absolute path to the clear file.
-    # @param [String] secure_file Absolute path to the secure file.
+    # @param [Pathname] clear Absolute path to the clear file.
+    # @param [Pathname] secure Absolute path to the secure file.
     #
-    def decrypt(clear_file, secure_file)
-      File.open(clear_file, 'wb') { |w| basic_decrypt(w, secure_file) }
-      File.delete(secure_file)
+    def decrypt(clear, secure)
+      clear.open('wb') { |c| secure.open('rb') { |s| basic_decrypt(c, s) } }
+      secure.delete
     end
 
     private
@@ -92,32 +92,30 @@ module Sia
       OpenSSL::PKCS5.pbkdf2_hmac(password, salt, iter, len, DIGEST.new)
     end
 
-    def basic_encrypt(clear_io, secure_file)
+    def basic_encrypt(clear_io, secure_io)
       cipher = new_cipher.encrypt
       cipher.key = @symmetric_key
       iv = cipher.random_iv
       cipher.iv  = iv
 
-      File.open(secure_file, 'wb') do |w|
-        w << iv
-        w << cipher.update(clear_io.read(@buffer_bytes)) until clear_io.eof?
-        w << cipher.final
+      secure_io << iv
+      until clear_io.eof?
+        secure_io << cipher.update(clear_io.read(@buffer_bytes))
       end
+      secure_io << cipher.final
     end
 
-    def basic_decrypt(clear_io, secure_file)
+    def basic_decrypt(clear_io, secure_io)
       decipher = new_cipher.decrypt
       decipher.key = @symmetric_key
       first_block = true
 
-      File.open(secure_file, 'rb') do |r|
-        until r.eof?
-          if first_block
-            decipher.iv = r.read(decipher.iv_len)
-            first_block = false
-          else
-            clear_io << decipher.update(r.read(@buffer_bytes))
-          end
+      until secure_io.eof?
+        if first_block
+          decipher.iv = secure_io.read(decipher.iv_len)
+          first_block = false
+        else
+          clear_io << decipher.update(secure_io.read(@buffer_bytes))
         end
       end
 
@@ -125,7 +123,7 @@ module Sia
 
       clear_io
 
-    rescue ::OpenSSL::Cipher::CipherError
+    rescue OpenSSL::Cipher::CipherError
       raise Sia::Error::PasswordError, 'Invalid password'
     end
 

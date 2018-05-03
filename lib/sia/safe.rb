@@ -94,18 +94,18 @@ module Sia
 
     # The directory where this safe is stored
     #
-    # @return [String]
+    # @return [Pathname]
     #
     def safe_dir
-      File.join(options[:root_dir], @name.to_s)
+      options[:root_dir] / @name.to_s
     end
 
     # The absolute path to the encrypted index file
     #
-    # @return [String]
+    # @return [Pathname]
     #
     def index_path
-      File.join(safe_dir, options[:index_name]).freeze
+      safe_dir / options[:index_name]
     end
 
     # Information about the files in the safe
@@ -113,22 +113,24 @@ module Sia
     # @return [Hash]
     #
     def index
-      return {} unless File.exist?(index_path)
+      return {} unless index_path.file?
 
       YAML.load(@lock.decrypt_from_file(index_path))
+    rescue Psych::SyntaxError
+      raise Sia::Error::PasswordError, 'Invalid password'
     end
 
     # The absolute path to the file storing the salt
     #
     def salt_path
-      File.join(safe_dir, options[:salt_name]).freeze
+      safe_dir / options[:salt_name]
     end
 
     # The salt in binary encoding
     #
     def salt
-      if File.exist?(salt_path)
-        File.read(salt_path)
+      if salt_path.file?
+        salt_path.read
       else
         @salt ||= SecureRandom.bytes(Sia::Lock::DIGEST.new.digest_length)
       end
@@ -139,18 +141,18 @@ module Sia
     # @param [String] filename Relative or absolute path to file to secure.
     #
     def close(filename)
+      clearpath = clear_filepath(filename)
+      check_file_is_in_safe_dir(clearpath) if options[:in_place]
       persist_safe_dir
 
-      filename = File.expand_path(filename)
+      @lock.encrypt(clearpath, secure_filepath(clearpath))
 
-      info = files.fetch(filename, {}).merge(
-        secure_file: digest_filename(filename),
+      info = files.fetch(clearpath, {}).merge(
+        secure_file: secure_filepath(clearpath),
         last_closed: Time.now,
         safe: true
       )
-      update_index(:files, files.merge(filename => info))
-
-      @lock.encrypt(filename, digest_filepath(filename))
+      update_index(:files, files.merge(clearpath => info))
     end
 
     # Extract a file from the safe
@@ -159,16 +161,17 @@ module Sia
     #   Note: This is the path to the file as it existed before being closed.
     #
     def open(filename)
-      filename = File.expand_path(filename)
+      clearpath = clear_filepath(filename)
+      check_file_is_in_safe_dir(clearpath) if options[:in_place]
 
-      info = files.fetch(filename, {}).merge(
-        secure_file: digest_filename(filename),
+      @lock.decrypt(clearpath, secure_filepath(clearpath))
+
+      info = files.fetch(clearpath, {}).merge(
+        secure_file: secure_filepath(clearpath),
         last_opened: Time.now,
         safe: false
       )
-      update_index(:files, files.merge(filename => info))
-
-      @lock.decrypt(filename, digest_filepath(filename))
+      update_index(:files, files.merge(clearpath => info))
     end
 
     # Open all files in the safe
@@ -190,7 +193,7 @@ module Sia
     def delete
       files.each do |filename, data|
         next unless data[:safe]
-        File.delete(digest_filepath(filename))
+        File.delete(secure_filepath(Pathname(filename)))
       end
       FileUtils.rm_rf(safe_dir)
     end
@@ -221,12 +224,32 @@ module Sia
 
     # Generate a urlsafe filename for storage in the safe
     def digest_filename(filename)
-      digest = Digest::SHA256.digest(filename)
+      digest = Digest::SHA256.digest(filename.to_s)
       filename = Base64.urlsafe_encode64(digest, padding: false)
     end
 
-    def digest_filepath(filename)
-      File.join(safe_dir, digest_filename(filename))
+    def secure_filepath(filename)
+      if options[:in_place]
+        Pathname(filename.to_s + '.sia_closed')
+      else
+        safe_dir / digest_filename(filename)
+      end
+    end
+
+    def clear_filepath(filename)
+      filename = Pathname(filename).expand_path
+      return filename unless options[:in_place]
+
+      filename.extname == '.sia_closed' ? filename.sub_ext('') : filename
+    end
+
+    def check_file_is_in_safe_dir(filename)
+      filename.ascend { |f| return if f == safe_dir }
+
+      raise Sia::Error::FileOutsideScopeError, <<~MSG
+        In-place safes can only open or close files within the `safe_dir`
+          #{filename} is not a descendant of #{safe_dir}
+      MSG
     end
   end # class Safe
 end # module Sia

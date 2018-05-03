@@ -39,16 +39,21 @@ RSpec.describe Sia do
 
       it 'respects customizations' do
         Sia.config(root_dir: '/a/b', index_name: 'c', buffer_bytes: 2)
-        expect(Sia.options[:root_dir]).to eq('/a/b')
+        expect(Sia.options[:root_dir]).to eq(Pathname('/a/b'))
         expect(Sia.options[:index_name]).to eq('c')
         expect(Sia.options[:buffer_bytes]).to eq(2)
       end
 
       it 'respects partial customizations' do
         Sia.config(root_dir: '/c')
-        expect(Sia.options[:root_dir]).to eq('/c')
+        expect(Sia.options[:root_dir]).to eq(Pathname('/c'))
         expect(Sia.options[:index_name]).to eq(def_conf[:index_name])
         expect(Sia.options[:buffer_bytes]).to eq(def_conf[:buffer_bytes])
+      end
+
+      it 'duck types settings' do
+        Sia.config(buffer_bytes: '1')
+        expect(Sia.options[:buffer_bytes]).to eq(1)
       end
 
       it 'raises error if index_name and secret_name are equal' do
@@ -64,12 +69,18 @@ RSpec.describe Sia do
       end
 
       it 'raises error when setting option to invalid type' do
-        expect { Sia.config(index_name: 113) }.to(
+        expect { Sia.config(buffer_bytes: []) }.to(
           raise_error(Sia::Error::ConfigurationError)
         )
       end
 
-      it 'raises error for blank options' do
+      it 'raises error for blank root_dir option' do
+        expect { Sia.config(root_dir: '') }.to(
+          raise_error(Sia::Error::ConfigurationError)
+        )
+      end
+
+      it 'raises error for blank index_name option' do
         expect { Sia.config(index_name: '') }.to(
           raise_error(Sia::Error::ConfigurationError)
         )
@@ -104,40 +115,40 @@ RSpec.describe Sia do
 
     describe '#encrypt_to_file' do
       before :each do
-        @secure_file = '/tmp/safe.spec.secure_file.txt'
+        @secure_file = Pathname('/tmp/safe.spec.secure_file.txt')
         @string = 'some clear string'
       end
 
       after :each do
-        File.delete(@secure_file) if File.exist?(@secure_file)
+        @secure_file.delete if @secure_file.exist?
       end
 
       it 'creates the secure_file' do
-        expect(File).to_not exist(@secure_file)
+        expect(@secure_file).to_not exist
         new_lock.encrypt_to_file(@string, @secure_file)
-        expect(File).to exist(@secure_file)
+        expect(@secure_file).to exist
       end
 
       it 'encrypts the secure_file' do
         new_lock.encrypt_to_file(@string, @secure_file)
-        expect(File.read(@secure_file)).to_not eq(@string)
+        expect(@secure_file.read).to_not eq(@string)
       end
     end # describe '#encrypt_to_file'
 
     describe '#decrypt_from_file' do
       before :each do
-        @secure_file = '/tmp/safe.spec.secure_file.txt'
+        @secure_file = Pathname('/tmp/safe.spec.secure_file.txt')
         @string = 'some clear string'
         new_lock.encrypt_to_file(@string, @secure_file)
       end
 
       after :each do
-        File.delete(@secure_file) if File.exist?(@secure_file)
+        @secure_file.delete if @secure_file.exist?
       end
 
       it 'does not delete the secure_file' do
         new_lock.decrypt_from_file(@secure_file)
-        expect(File).to exist(@secure_file)
+        expect(@secure_file).to exist
       end
 
       it 'restores the clear message' do
@@ -148,75 +159,75 @@ RSpec.describe Sia do
 
     describe '#encrypt' do
       before :each do
-        @secure_file = '/tmp/safe.spec.secure_file.txt'
-        @clear_file = '/tmp/safe.spec.clear_file.txt'
+        @secure_file = Pathname('/tmp/safe.spec.secure_file.txt')
+        @clear_file = Pathname('/tmp/safe.spec.clear_file.txt')
         @string = 'some clear string'
-        File.write(@clear_file, @string)
+        @clear_file.write(@string)
       end
 
       after :each do
-        File.delete(@secure_file) if File.exist?(@secure_file)
-        File.delete(@clear_file) if File.exist?(@clear_file)
+        @secure_file.delete if @secure_file.exist?
+        @clear_file.delete if @clear_file.exist?
       end
 
       it 'creates the secure_file' do
-        expect(File).to_not exist(@secure_file)
+        expect(@secure_file).to_not exist
         new_lock.encrypt(@clear_file, @secure_file)
-        expect(File).to exist(@secure_file)
+        expect(@secure_file).to exist
       end
 
       it 'destroys the clear file' do
-        expect(File).to exist(@clear_file)
+        expect(@clear_file).to exist
         new_lock.encrypt(@clear_file, @secure_file)
-        expect(File).to_not exist(@clear_file)
+        expect(@clear_file).to_not exist
       end
 
       it 'encrypts the secure_file' do
         new_lock.encrypt(@clear_file, @secure_file)
-        expect(File.read(@secure_file)).to_not eq(@string)
+        expect(@secure_file.read).to_not eq(@string)
       end
     end # describe '#encrypt'
 
     describe '#decrypt' do
       before :each do
-        @secure_file = '/tmp/safe.spec.secure_file.txt'
-        @clear_file = '/tmp/safe.spec.clear_file.txt'
+        @secure_file = Pathname('/tmp/safe.spec.secure_file.txt')
+        @clear_file = Pathname('/tmp/safe.spec.clear_file.txt')
         @string = 'some clear string'
-        File.write(@clear_file, @string)
+        @clear_file.write(@string)
         new_lock.encrypt(@clear_file, @secure_file)
       end
 
       after :each do
-        File.delete(@secure_file) if File.exist?(@secure_file)
-        File.delete(@clear_file) if File.exist?(@clear_file)
+        @secure_file.delete if @secure_file.exist?
+        @clear_file.delete if @clear_file.exist?
       end
 
       it 'destroys the secure_file' do
-        expect(File).to exist(@secure_file)
+        expect(@secure_file).to exist
         new_lock.decrypt(@clear_file, @secure_file)
-        expect(File).to_not exist(@secure_file)
+        expect(@secure_file).to_not exist
       end
 
       it 'creates the clear file' do
-        expect(File).to_not exist(@clear_file)
+        expect(@clear_file).to_not exist
         new_lock.decrypt(@clear_file, @secure_file)
-        expect(File).to exist(@clear_file)
+        expect(@clear_file).to exist
       end
 
       it 'decrypts the secure_file' do
         new_lock.decrypt(@clear_file, @secure_file)
-        expect(File.read(@clear_file)).to eq(@string)
+        expect(@clear_file.read).to eq(@string)
       end
     end # describe '#decrypt'
   end # describe Sia::Lock
 
   describe Sia::Safe do
-    before :all do
+    before :each do
       Sia.config(root_dir: test_dir, digest_iterations: 1)
     end
 
     after :each do
-      FileUtils.rm_rf(test_dir)
+      test_dir.rmtree if test_dir.exist?
     end
 
     describe 'configuring a safe' do
@@ -242,26 +253,26 @@ RSpec.describe Sia do
 
     describe 'instance methods' do
       before :each do
-        @clear_file = '/tmp/safe.spec.clear_file.txt'
+        @clear_file = Pathname('/tmp/safe.spec.clear_file.txt')
         @clear_file_contents = "Some string\nwith linebreaks\nand stuff\n"
-        File.write(@clear_file, @clear_file_contents)
+        @clear_file.write(@clear_file_contents)
       end
 
       after :each do
-        File.delete(@clear_file) if File.exists?(@clear_file)
+        @clear_file.delete if @clear_file.exist?
       end
 
       describe '#new' do
         it 'does not create the safe dir' do
-          FileUtils.rm_rf(test_dir)
+          expect(test_dir).to_not exist
           new_safe
-          expect(File).to_not exist(File.expand_path(test_dir))
+          expect(test_dir).to_not exist
         end
 
         it 'does not create the index file' do
-          FileUtils.rm_rf(new_safe.index_path)
+          expect(new_safe.index_path).to_not exist
           new_safe
-          expect(File).to_not exist(new_safe.index_path)
+          expect(new_safe.index_path).to_not exist
         end
 
         it 'assigns a salt' do
@@ -269,7 +280,7 @@ RSpec.describe Sia do
         end
 
         it 'assigns different salts per new instance' do
-          expect(new_safe.salt).not_to(eq(new_safe.salt))
+          expect(new_safe.salt).not_to eq(new_safe.salt)
         end
 
         it 'raises exception with the wrong password if safe already exists' do
@@ -306,28 +317,36 @@ RSpec.describe Sia do
       end # describe '#new'
 
       describe '#close' do
-        it 'removes the clear file' do
-          expect(File).to exist(@clear_file)
+        it 'works with string path' do
+          new_safe.close(@clear_file.to_s)
+        end
+
+        it 'works with Pathname' do
           new_safe.close(@clear_file)
-          expect(File).not_to exist(@clear_file)
+        end
+
+        it 'removes the clear file' do
+          expect(@clear_file).to exist
+          new_safe.close(@clear_file)
+          expect(@clear_file).not_to exist
         end
 
         it 'creates the index file' do
-          expect(File).to_not exist(new_safe.index_path)
+          expect(new_safe.index_path).to_not exist
           new_safe.close(@clear_file)
-          expect(File).to exist(new_safe.index_path)
+          expect(new_safe.index_path).to exist
         end
 
         it 'encrypts the index file' do
           new_safe.close(@clear_file)
-          expect { YAML.load(File.read(new_safe.index_path)) }
+          expect { YAML.load(new_safe.index_path.read) }
             .to(raise_error(Psych::SyntaxError))
         end
 
         it 'creates the safe directory' do
-          expect(File).to_not exist(new_safe.send(:safe_dir))
+          expect(new_safe.safe_dir).to_not exist
           new_safe.close(@clear_file)
-          expect(File).to exist(new_safe.send(:safe_dir))
+          expect(new_safe.safe_dir).to exist
         end
 
         it 'creates a new encrypted file' do
@@ -338,18 +357,26 @@ RSpec.describe Sia do
         end
 
         it 'creates the index entry for the clear file' do
+          expect(new_safe.index).to_not have_key(:files)
+
           new_safe.close(@clear_file)
-          expect(new_safe.index).to have_key(:files)
-          expect(new_safe.index[:files]).to have_key(@clear_file)
-          expect(new_safe.index[:files][@clear_file]).to have_key(:secure_file)
-          expect(new_safe.index[:files][@clear_file]).to have_key(:last_closed)
-          expect(new_safe.index[:files][@clear_file]).to have_key(:safe)
+
+          i = new_safe.index
+          expect(i).to have_key(:files)
+
+          f = i[:files]
+          expect(f).to have_key(@clear_file)
+
+          c = f[@clear_file]
+          expect(c).to have_key(:secure_file)
+          expect(c).to have_key(:last_closed)
+          expect(c).to have_key(:safe)
         end
 
-        it 'creates the secret file for the safe' do
-          expect(File).not_to exist(new_safe.salt_path)
+        it 'creates the salt file for the safe' do
+          expect(new_safe.salt_path).not_to exist
           new_safe.close(@clear_file)
-          expect(File).to exist(new_safe.salt_path)
+          expect(new_safe.salt_path).to exist
         end
       end # describe '#close'
 
@@ -358,10 +385,18 @@ RSpec.describe Sia do
           new_safe.close(@clear_file)
         end
 
-        it 'creates the clear file' do
-          expect(File).not_to exist(@clear_file)
+        it 'works with string path' do
+          new_safe.open(@clear_file.to_s)
+        end
+
+        it 'works with Pathname' do
           new_safe.open(@clear_file)
-          expect(File).to exist(@clear_file)
+        end
+
+        it 'creates the clear file' do
+          expect(@clear_file).not_to exist
+          new_safe.open(@clear_file)
+          expect(@clear_file).to exist
         end
 
         it 'removes the encrypted file' do
@@ -373,15 +408,15 @@ RSpec.describe Sia do
 
         it 'decrypts the file' do
           new_safe.open(@clear_file)
-          expect(File.read(@clear_file)).to eq(@clear_file_contents)
+          expect(@clear_file.read).to eq(@clear_file_contents)
         end
       end # describe '#open'
 
       describe '#empty' do
         before :each do
-          @other_file = '/tmp/safe.spec.other_file.txt'
+          @other_file = Pathname('/tmp/safe.spec.other_file.txt')
           @other_file_contents = "Some other string\nwith stuff\n"
-          File.write(@other_file, @other_file_contents)
+          @other_file.write(@other_file_contents)
 
           new_safe.close(@clear_file)
           new_safe.close(@other_file)
@@ -389,11 +424,11 @@ RSpec.describe Sia do
 
         it 'restores all the clearfiles' do
           new_safe.empty
-          expect(File).to exist(@clear_file)
-          expect(File).to exist(@other_file)
+          expect(@clear_file).to exist
+          expect(@other_file).to exist
 
-          expect(File.read(@clear_file)).to eq(@clear_file_contents)
-          expect(File.read(@other_file)).to eq(@other_file_contents)
+          expect(@clear_file.read).to eq(@clear_file_contents)
+          expect(@other_file.read).to eq(@other_file_contents)
         end
 
         it 'works if some files are already open' do
@@ -404,16 +439,16 @@ RSpec.describe Sia do
         it 'removes all the secure files from the safe' do
           new_safe.empty
           new_safe.send(:files).each do |_, data|
-            expect(File).not_to exist(data[:secure_file])
+            expect(data[:secure_file]).not_to exist
           end
         end
       end # describe '#empty'
 
       describe '#fill' do
         before :each do
-          @other_file = '/tmp/safe.spec.other_file.txt'
+          @other_file = Pathname('/tmp/safe.spec.other_file.txt')
           @other_file_contents = "Some other string\nwith stuff\n"
-          File.write(@other_file, @other_file_contents)
+          @other_file.write(@other_file_contents)
 
           new_safe.close(@clear_file)
           new_safe.close(@other_file)
@@ -422,8 +457,8 @@ RSpec.describe Sia do
 
         it 'removes all the clearfiles' do
           new_safe.fill
-          expect(File).not_to exist(@clear_file)
-          expect(File).not_to exist(@other_file)
+          expect(@clear_file).not_to exist
+          expect(@other_file).not_to exist
         end
 
         it 'works if some files are already closed' do
@@ -434,7 +469,7 @@ RSpec.describe Sia do
         it 'restores all the secure files to the safe' do
           new_safe.fill
           new_safe.send(:files).each do |filename, _|
-            expect(File).to exist(new_safe.send(:digest_filepath, filename))
+            expect(new_safe.send(:secure_filepath, filename)).to exist
           end
         end
       end # describe '#empty'
@@ -449,14 +484,14 @@ RSpec.describe Sia do
         it 'removes the safe_dir for this safe' do
           new_safe.close(@clear_file)
           new_safe.delete
-          expect(File).to_not exist(new_safe.safe_dir)
+          expect(new_safe.safe_dir).to_not exist
         end
 
         it 'does not affect open files' do
           new_safe.close(@clear_file)
           new_safe.open(@clear_file)
           new_safe.delete
-          expect(File).to exist(@clear_file)
+          expect(@clear_file).to exist
         end
 
         it 'removes closed files' do
@@ -472,29 +507,93 @@ RSpec.describe Sia do
       end # describe '#delete'
     end # describe 'instance methods'
 
+    describe 'an in-place safe' do
+      before :each do
+        Sia.config(in_place: true)
+        (test_dir / 'test').mkpath
+
+        @valid_clear_file = test_dir / 'test' / 'valid_clear_file.txt'
+        @invalid_clear_file = Pathname('/tmp/safe.spec.invalid_clear_file.txt')
+        @clear_text = 'this is the clear text'
+        [@valid_clear_file, @invalid_clear_file].each do |f|
+          f.write(@clear_text)
+        end
+
+        @closed = Pathname(@valid_clear_file.to_s + '.sia_closed')
+      end
+
+      after :all do
+        Sia.config(in_place: false)
+      end
+
+      describe '#close' do
+        it 'works for clear files in root_dir' do
+          new_safe.close(@valid_clear_file)
+        end
+
+        it 'raises error for clear files outside root_dir' do
+          expect { new_safe.close(@invalid_clear_file) }.to(
+            raise_error(Sia::Error::FileOutsideScopeError)
+          )
+        end
+
+        it 'adds the .sia_closed extension to the filename' do
+          expect(@closed).to_not exist
+          new_safe.close(@valid_clear_file)
+          expect(@valid_clear_file).to_not exist
+          expect(@closed).to exist
+        end
+      end
+
+      describe '#open' do
+        before :each do
+          new_safe.close(@valid_clear_file)
+        end
+
+        after :each do
+          new_safe.delete
+        end
+
+        it 'removes the .sia_closed extension from the filename' do
+          expect(@closed).to exist
+          new_safe.open(@valid_clear_file)
+          expect(@valid_clear_file).to exist
+          expect(@closed).to_not exist
+        end
+
+        it 'works when passed the file with the .sia_closed extension' do
+          new_safe.open(@closed)
+        end
+      end
+    end
+
     describe 'a Sia::Safe integration test' do
       it 'does not break' do
-        clear_file1 = '/tmp/safe.spec.clear_file1.txt'
-        clear_file2 = '/tmp/safe.spec.clear_file2.txt'
+        clear_file1 = Pathname('/tmp/safe.spec.clear_file1.txt')
+        clear_file2 = Pathname('/tmp/safe.spec.clear_file2.txt')
         clear_file1_contents = "Some string\nwith linebreaks\nand stuff\n"
         clear_file2_contents = "Some other string\nwith linebreaks\nand stuff\n"
-        File.write(clear_file1, clear_file1_contents)
-        File.write(clear_file2, clear_file2_contents)
+        clear_file1.write(clear_file1_contents)
+        clear_file2.write(clear_file2_contents)
 
         # Should not raise an error because the good safe has not been persisted
         new_safe(password: 'bad password')
 
-        new_safe.close(clear_file1)
-        new_safe.close(clear_file2)
-        new_safe.open(clear_file1)
-        new_safe.open(clear_file2)
-        new_safe.close(clear_file1)
-        new_safe.close(clear_file2)
-        new_safe.open(clear_file1)
-        new_safe.open(clear_file2)
+        10.times do
+          new_safe.close(clear_file1)
+          new_safe.close(clear_file2)
+          new_safe.open(clear_file1)
+          new_safe.open(clear_file2)
+          new_safe.delete
+        end
 
-        expect(File.read(clear_file1)).to eq(clear_file1_contents)
-        expect(File.read(clear_file2)).to eq(clear_file2_contents)
+        expect(clear_file1.read).to eq(clear_file1_contents)
+        expect(clear_file2.read).to eq(clear_file2_contents)
+
+        new_safe.close(clear_file1)
+        new_safe.close(clear_file2)
+        new_safe.open(clear_file1)
+        new_safe.open(clear_file2)
 
         expect { new_safe(password: 'bad password') }
           .to raise_error(Sia::Error::PasswordError)
