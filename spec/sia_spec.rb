@@ -487,6 +487,13 @@ RSpec.describe Sia do
           expect(new_safe.safe_dir).to_not exist
         end
 
+        it 'does not remove safe_dir if there are other files in it' do
+          new_safe.close(@clear_file)
+          (new_safe.safe_dir / 'personal_file.txt').write('I am here')
+          new_safe.delete
+          expect(new_safe.safe_dir).to exist
+        end
+
         it 'does not affect open files' do
           new_safe.close(@clear_file)
           new_safe.open(@clear_file)

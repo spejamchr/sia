@@ -117,6 +117,9 @@ module Sia
 
       YAML.load(@lock.decrypt_from_file(index_path))
     rescue Psych::SyntaxError
+      # A Psych::SyntaxError was raised in my integration test once when an
+      # incorrect password was used. This raises the right error if that ever
+      # happens again.
       raise Sia::Error::PasswordError, 'Invalid password'
     end
 
@@ -158,7 +161,8 @@ module Sia
     # Extract a file from the safe
     #
     # @param [String] filename Relative or absolute path to file to extract.
-    #   Note: This is the path to the file as it existed before being closed.
+    #   Note: For in-place safes, the closed path may be used. Otherwise, this
+    #   the path to the file as it existed before being closed.
     #
     def open(filename)
       clearpath = clear_filepath(filename)
@@ -188,14 +192,15 @@ module Sia
 
     # Delete the safe as-is, without opening or closing files
     #
-    # All closed files are lost. Open files are not lost.
+    # All closed files are deleted. Open files are not deleted. The safe dir is
+    # deleted if there is nothing besides closed files, the {#index_path}, and
+    # the {#salt_path} in it.
     #
     def delete
-      files.each do |filename, data|
-        next unless data[:safe]
-        File.delete(secure_filepath(Pathname(filename)))
-      end
-      FileUtils.rm_rf(safe_dir)
+      files.each { |_, d| d[:secure_file].delete if d[:safe] }
+      index_path.delete
+      salt_path.delete
+      safe_dir.delete if safe_dir.empty?
     end
 
     private
@@ -208,8 +213,8 @@ module Sia
 
     def persist_safe_dir
       return if @safe_dir_persisted
-      FileUtils.mkdir_p(safe_dir) unless File.directory?(safe_dir)
-      File.write(salt_path, salt) unless File.exist?(salt_path)
+      safe_dir.mkpath unless safe_dir.directory?
+      salt_path.write(salt) unless salt_path.file?
       @safe_dir_persisted = true
     end
 
