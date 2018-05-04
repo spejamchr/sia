@@ -52,6 +52,7 @@ module Sia::Configurable
     digest_iterations: 200_000,
     buffer_bytes: 512,
     in_place: false,
+    portable: false,
   }.freeze
 
   # The configuration options
@@ -87,14 +88,14 @@ module Sia::Configurable
       convert(:root_dir) { |v| Pathname(v).expand_path }
       convert(:index_name, :salt_name) { |v| v.to_s }
       convert(:digest_iterations, :buffer_bytes) { |v| v.to_i }
-      convert(:in_place) { |v| !!v }
+      convert(:in_place, :portable) { |v| !!v }
     end
 
     options # If nothing is amiss, go ahead and instantiate the options
   end
 
   def validation_for(opt, &block)
-    Validator.new(opt).instance_eval(&block)
+    Validator.new(opt).instance_eval(&block).done
   end
 
   # Validate the options
@@ -102,6 +103,7 @@ module Sia::Configurable
   class Validator
     def initialize(opt)
       @opt = opt
+      @converted = []
     end
 
     def not_empty(*keys)
@@ -109,9 +111,11 @@ module Sia::Configurable
         next unless @opt[k].empty?
         raise Sia::Error::ConfigurationError, "#{k.inspect} must not be empty"
       end
+      self
     end
 
     def convert(*keys, &block)
+      @converted += keys
       (keys & @opt.keys).each do |k|
         @opt[k] = yield @opt[k]
       rescue NoMethodError => nme
@@ -119,6 +123,12 @@ module Sia::Configurable
           "#{k.inspect} was #{nme.args} and could not be converted using " +
           "`#{nme.name.inspect}`"
       end
+      self
+    end
+
+    def done
+      return if DEFAULTS.keys.to_set == @converted.to_set
+      raise "Not all options were converted! #{DEFAULTS.keys - @converted}"
     end
   end # class Validator
 end # module Sia::Configurable

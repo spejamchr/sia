@@ -32,6 +32,7 @@ RSpec.describe Sia do
           digest_iterations: 1,
           buffer_bytes: 1,
           in_place: true,
+          portable: true,
         }
         expect(all_options.keys.sort).to eq(def_conf.keys.sort)
         Sia.config(**all_options)
@@ -519,42 +520,47 @@ RSpec.describe Sia do
         Sia.config(in_place: true)
         (test_dir / 'test').mkpath
 
-        @valid_clear_file = test_dir / 'test' / 'valid_clear_file.txt'
-        @invalid_clear_file = Pathname('/tmp/safe.spec.invalid_clear_file.txt')
+        @in_clear_file = test_dir / 'test' / 'in_clear_file.txt'
+        @out_clear_file = Pathname('/tmp/safe.spec.out_clear_file.txt')
         @clear_text = 'this is the clear text'
-        [@valid_clear_file, @invalid_clear_file].each do |f|
+        [@in_clear_file, @out_clear_file].each do |f|
           f.write(@clear_text)
         end
 
-        @closed = Pathname(@valid_clear_file.to_s + '.sia_closed')
+        @closed = Pathname(@in_clear_file.to_s + '.sia_closed')
       end
 
       after :all do
-        Sia.config(in_place: false)
+        Sia.set_default_options!(:in_place)
       end
 
       describe '#close' do
         it 'works for clear files in root_dir' do
-          new_safe.close(@valid_clear_file)
+          new_safe.close(@in_clear_file)
         end
 
-        it 'raises error for clear files outside root_dir' do
-          expect { new_safe.close(@invalid_clear_file) }.to(
-            raise_error(Sia::Error::FileOutsideScopeError)
-          )
+        it 'works for clear files outside root_dir' do
+          new_safe.close(@out_clear_file)
         end
 
         it 'adds the .sia_closed extension to the filename' do
           expect(@closed).to_not exist
-          new_safe.close(@valid_clear_file)
-          expect(@valid_clear_file).to_not exist
+          new_safe.close(@in_clear_file)
+          expect(@in_clear_file).to_not exist
           expect(@closed).to exist
         end
-      end
+
+        it 'does not add encrypted files to safe_dir' do
+          before = encrypted_file_count
+          new_safe.close(@out_clear_file)
+          after = encrypted_file_count
+          expect(before).to eq(after)
+        end
+      end # describe '#close'
 
       describe '#open' do
         before :each do
-          new_safe.close(@valid_clear_file)
+          new_safe.close(@in_clear_file)
         end
 
         after :each do
@@ -563,16 +569,47 @@ RSpec.describe Sia do
 
         it 'removes the .sia_closed extension from the filename' do
           expect(@closed).to exist
-          new_safe.open(@valid_clear_file)
-          expect(@valid_clear_file).to exist
+          new_safe.open(@in_clear_file)
+          expect(@in_clear_file).to exist
           expect(@closed).to_not exist
         end
 
         it 'works when passed the file with the .sia_closed extension' do
           new_safe.open(@closed)
         end
+      end # describe '#open'
+    end # describe 'an in-place safe'
+
+    describe 'a portable safe' do
+      before :each do
+        Sia.config(portable: true)
+        (test_dir / 'test').mkpath
+
+        @in_clear_file = test_dir / 'test' / 'in_clear_file.txt'
+        @out_clear_file = Pathname('/tmp/safe.spec.out_clear_file.txt')
+        @clear_text = 'this is the clear text'
+        [@in_clear_file, @out_clear_file].each do |f|
+          f.write(@clear_text)
+        end
+
+        @closed = Pathname(@in_clear_file.to_s + '.sia_closed')
       end
-    end
+
+      after :all do
+        Sia.set_default_options!(:portable)
+      end
+
+      describe '#close' do
+        it 'works for clear files in root_dir' do
+          new_safe.close(@in_clear_file)
+        end
+
+        it 'does not work for clear files outside root_dir' do
+          expect { new_safe.close(@out_clear_file) }
+            .to(raise_error(Sia::Error::FileOutsideScopeError))
+        end
+      end # describe '#close'
+    end # describe 'a portable safe'
 
     describe 'a Sia::Safe integration test' do
       it 'does not break' do

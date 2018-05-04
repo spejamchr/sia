@@ -145,7 +145,7 @@ module Sia
     #
     def close(filename)
       clearpath = clear_filepath(filename)
-      check_file_is_in_safe_dir(clearpath) if options[:in_place]
+      check_file_is_in_safe_dir(clearpath) if options[:portable]
       persist_safe_dir
 
       @lock.encrypt(clearpath, secure_filepath(clearpath))
@@ -166,7 +166,7 @@ module Sia
     #
     def open(filename)
       clearpath = clear_filepath(filename)
-      check_file_is_in_safe_dir(clearpath) if options[:in_place]
+      check_file_is_in_safe_dir(clearpath) if options[:portable]
 
       @lock.decrypt(clearpath, secure_filepath(clearpath))
 
@@ -252,7 +252,7 @@ module Sia
       filename.ascend { |f| return if f == safe_dir }
 
       raise Sia::Error::FileOutsideScopeError, <<~MSG
-        In-place safes can only open or close files within the `safe_dir`
+        Portable safes can only open or close files within the `safe_dir`
           #{filename} is not a descendant of #{safe_dir}
       MSG
     end
