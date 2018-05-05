@@ -76,8 +76,8 @@ module Sia
     # @return [Safe]
     #
     def initialize(name:, password:, **opt)
-      validate_options(opt)
-      @options.merge!(opt)
+      options # Initialize the options with defaults
+      @options.merge!(clean_options(opt))
       @options.freeze
 
       @name = name.to_sym
@@ -235,7 +235,7 @@ module Sia
 
     def secure_filepath(filename)
       if options[:in_place]
-        Pathname(filename.to_s + '.sia_closed')
+        Pathname(filename.to_s + options[:extension])
       else
         safe_dir / digest_filename(filename)
       end
@@ -245,7 +245,7 @@ module Sia
       filename = Pathname(filename).expand_path
       return filename unless options[:in_place]
 
-      filename.extname == '.sia_closed' ? filename.sub_ext('') : filename
+      filename.extname == options[:extension] ? filename.sub_ext('') : filename
     end
 
     def check_file_is_in_safe_dir(filename)

@@ -17,10 +17,20 @@ RSpec.describe Sia do
       expect(Sia.options[:in_place]).to eq(def_conf[:in_place])
     end
 
+    it 'has valid defaults' do
+      Sia.send(:clean_options, Sia::Configurable::DEFAULTS)
+    end
+
     it 'cannot be changed by manipulating the options object directly' do
       before = Sia.options.dup
       Sia.options.merge!(a: 1, b: 2)
       expect(Sia.options).to eq(before)
+    end
+
+    it 'cannot be changed by manipulating options values' do
+      before = Sia.options[:salt_name].dup
+      Sia.options[:salt_name] << 'hacky something'
+      expect(Sia.options[:salt_name]).to eq(before)
     end
 
     describe '#config' do
@@ -32,6 +42,7 @@ RSpec.describe Sia do
           digest_iterations: 1,
           buffer_bytes: 1,
           in_place: true,
+          extension: :sia,
           portable: true,
         }
         expect(all_options.keys.sort).to eq(def_conf.keys.sort)
@@ -556,6 +567,13 @@ RSpec.describe Sia do
           after = encrypted_file_count
           expect(before).to eq(after)
         end
+
+        it 'respects the extension option' do
+          ext = '.some_new_extension'
+          s = new_safe(extension: ext)
+          s.close(@in_clear_file)
+          expect(Pathname(@in_clear_file.to_s + ext)).to exist
+        end
       end # describe '#close'
 
       describe '#open' do
@@ -572,10 +590,25 @@ RSpec.describe Sia do
           new_safe.open(@in_clear_file)
           expect(@in_clear_file).to exist
           expect(@closed).to_not exist
+          expect(@in_clear_file.read).to eq(@clear_text)
         end
 
         it 'works when passed the file with the .sia_closed extension' do
           new_safe.open(@closed)
+          expect(@in_clear_file.read).to eq(@clear_text)
+        end
+
+        it 'respects the extension option' do
+          new_safe.open(@in_clear_file)
+
+          ext = '.some_new_extension'
+          s = new_safe(extension: ext)
+
+          s.close(@in_clear_file)
+          s.open(@in_clear_file)
+          s.close(@in_clear_file)
+          s.open(Pathname(@in_clear_file.to_s + ext))
+          expect(@in_clear_file.read).to eq(@clear_text)
         end
       end # describe '#open'
     end # describe 'an in-place safe'
@@ -591,12 +624,13 @@ RSpec.describe Sia do
         [@in_clear_file, @out_clear_file].each do |f|
           f.write(@clear_text)
         end
-
-        @closed = Pathname(@in_clear_file.to_s + '.sia_closed')
       end
 
-      after :all do
+      after :each do
         Sia.set_default_options!(:portable)
+        [@in_clear_file, @out_clear_file].each do |f|
+          f.delete if f.exist?
+        end
       end
 
       describe '#close' do
@@ -609,6 +643,24 @@ RSpec.describe Sia do
             .to(raise_error(Sia::Error::FileOutsideScopeError))
         end
       end # describe '#close'
+
+      describe '#open' do
+        before :each do
+          new_safe.close(@in_clear_file)
+        end
+
+        it 'works for files in root_dir' do
+          new_safe.open(@in_clear_file)
+          expect(@in_clear_file.read).to eq(@clear_text)
+        end
+
+        it 'does not work for files outside root dir' do
+          new_safe(portable: false).close(@out_clear_file)
+          expect { new_safe.open(@out_clear_file) }
+            .to(raise_error(Sia::Error::FileOutsideScopeError))
+        end
+
+      end # describe '#open'
     end # describe 'a portable safe'
 
     describe 'a Sia::Safe integration test' do

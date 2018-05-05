@@ -43,8 +43,7 @@ module Sia
     # @return [Hash]
     #
     def config(**opt)
-      validate_options(opt)
-      @options.merge!(opt)
+      @options.merge!(clean_options(opt))
       options
     end
 

@@ -45,13 +45,25 @@ module Sia::Configurable
   #
   # `:buffer_bytes` - The buffer size to use when reading/writing files.
   #
+  # `:in_place` - If true, closed files will be encrypted where they are with
+  #     a Sia file extension attached to the name. If false, closed files will
+  #     be moved to the safe dir and renamed to a url-safe hash.
+  #
+  # `:extension` - In-place safes will attach this extension to closed files.
+  #     Ignored unless `:in_place` is truthy. Can include the period or not (so
+  #     `'.thing'` and `'thing'` will both work the same).
+  #
+  # `:portable` - If true, all clear files must be children of the safe dir.
+  #     Useful if the safe will be shared.
+  #
   DEFAULTS = {
     root_dir: Pathname("~").expand_path / '.sia_safes',
-    index_name: '.sia_index'.freeze,
-    salt_name: '.sia_salt'.freeze,
+    index_name: '.sia_index',
+    salt_name: '.sia_salt',
     digest_iterations: 200_000,
     buffer_bytes: 512,
     in_place: false,
+    extension: '.sia_closed',
     portable: false,
   }.freeze
 
@@ -60,16 +72,13 @@ module Sia::Configurable
   # @return [Hash]
   #
   def options
-    (@options ||= defaults).dup
+    (@options ||= defaults).transform_values(&:dup).dup
   end
 
   private
 
-  def validate_options(opt)
-    unless opt.is_a? Hash
-      raise Sia::Error::ConfigurationError, "Expected Hash but got #{opt.class}"
-    end
-
+  def clean_options(opt)
+    opt = opt.dup
     illegals = opt.keys - DEFAULTS.keys
     unless illegals.empty?
       raise Sia::Error::InvalidOptionError.new(illegals, DEFAULTS.keys)
@@ -83,15 +92,16 @@ module Sia::Configurable
     end
 
     validation_for(opt) do
-      not_empty :root_dir, :index_name, :salt_name
+      not_empty :root_dir, :index_name, :salt_name, :extension
 
       convert(:root_dir) { |v| Pathname(v).expand_path }
-      convert(:index_name, :salt_name) { |v| v.to_s }
+      convert(:index_name, :salt_name) { |v| v.to_s}
       convert(:digest_iterations, :buffer_bytes) { |v| v.to_i }
       convert(:in_place, :portable) { |v| !!v }
+      convert(:extension) { |v| ".#{v.to_s.reverse.chomp('.').reverse}" }
     end
 
-    options # If nothing is amiss, go ahead and instantiate the options
+    opt
   end
 
   def validation_for(opt, &block)
@@ -126,9 +136,16 @@ module Sia::Configurable
       self
     end
 
+    # Make sure Sia converts each option exactly one time. Any time a new
+    # option is added, it needs to be converted.
     def done
-      return if DEFAULTS.keys.to_set == @converted.to_set
-      raise "Not all options were converted! #{DEFAULTS.keys - @converted}"
+      return if DEFAULTS.keys.sort == @converted.sort
+
+      bads = DEFAULTS.transform_values { 0 }.merge(
+        @converted.group_by(&:itself).transform_values(&:count)
+      ).select { |k, v| v != 1 }
+
+      raise "Options were not converted exactly once! #{bads}"
     end
   end # class Validator
 end # module Sia::Configurable
