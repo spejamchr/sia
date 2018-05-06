@@ -31,7 +31,7 @@ module Sia
       end
     end
 
-    # Raised with in-place safes when trying to close a file not in the safe_dir
+    # Raised with portable safes when trying to close a file not in the safe_dir
     class FileOutsideScopeError < Error; end
 
   end

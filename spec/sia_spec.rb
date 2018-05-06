@@ -97,6 +97,12 @@ RSpec.describe Sia do
           raise_error(Sia::Error::ConfigurationError)
         )
       end
+
+      it 'raises error for url-unsafe options' do
+        expect { Sia.config(root_dir: '&^%$#!') }.to(
+          raise_error(Sia::Error::ConfigurationError)
+        )
+      end
     end # describe '#config'
 
     describe '#set_default_options!' do
@@ -390,6 +396,13 @@ RSpec.describe Sia do
           new_safe.close(@clear_file)
           expect(new_safe.salt_path).to exist
         end
+
+        it 'handles files with funky names' do
+          funky_file = Pathname('/tmp/s@fe.$p3c."funky" c|ear file.txt')
+          funky_file_contents = "Some string\nwith linebreaks\nand stuff\n"
+          funky_file.write(funky_file_contents)
+          new_safe.close(funky_file)
+        end
       end # describe '#close'
 
       describe '#open' do
@@ -421,6 +434,14 @@ RSpec.describe Sia do
         it 'decrypts the file' do
           new_safe.open(@clear_file)
           expect(@clear_file.read).to eq(@clear_file_contents)
+        end
+
+        it 'handles files with funky names' do
+          funky_file = Pathname('/tmp/s@fe.$p3c."funky" c|ear file.txt')
+          funky_file_contents = "Some string\nwith linebreaks\nand stuff\n"
+          funky_file.write(funky_file_contents)
+          new_safe.close(funky_file)
+          new_safe.open(funky_file)
         end
       end # describe '#open'
 

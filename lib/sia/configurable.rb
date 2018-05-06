@@ -92,10 +92,11 @@ module Sia::Configurable
     end
 
     validation_for(opt) do
-      not_empty :root_dir, :index_name, :salt_name, :extension
+      safe_path :root_dir
+      safe_filename :index_name, :salt_name, :extension
 
       convert(:root_dir) { |v| Pathname(v).expand_path }
-      convert(:index_name, :salt_name) { |v| v.to_s}
+      convert(:index_name, :salt_name) { |v| v.to_s }
       convert(:digest_iterations, :buffer_bytes) { |v| v.to_i }
       convert(:in_place, :portable) { |v| !!v }
       convert(:extension) { |v| ".#{v.to_s.reverse.chomp('.').reverse}" }
@@ -111,17 +112,28 @@ module Sia::Configurable
   # Validate the options
   # @private
   class Validator
+
+    SAFE_PATH_REGEX = /\A[A-Za-z0-9\._-]+\z/
+
     def initialize(opt)
       @opt = opt
       @converted = []
     end
 
-    def not_empty(*keys)
+    def safe_path(*keys)
       (keys & @opt.keys).each do |k|
-        next unless @opt[k].empty?
-        raise Sia::Error::ConfigurationError, "#{k.inspect} must not be empty"
+        if @opt[k].to_s.empty?
+          raise Sia::Error::ConfigurationError, "#{k.inspect} must not be empty"
+        end
+
+        slash = File::SEPARATOR
+        path = @opt[k].to_s.chomp(slash).reverse.chomp(slash).reverse
+        path.split(slash).all? { |s| portable_file(s) }
       end
-      self
+    end
+
+    def safe_filename(*keys)
+      (keys & @opt.keys).each { |k| portable_file(@opt[k].to_s) }
     end
 
     def convert(*keys, &block)
@@ -134,6 +146,12 @@ module Sia::Configurable
           "`#{nme.name.inspect}`"
       end
       self
+    end
+
+    def portable_file(string)
+      return if string =~ SAFE_PATH_REGEX
+      raise Sia::Error::ConfigurationError,
+        "Filenames must match the regex #{SAFE_PATH_REGEX.inspect}, but was #{string}"
     end
 
     # Make sure Sia converts each option exactly one time. Any time a new
