@@ -183,6 +183,12 @@ RSpec.describe Sia do
       end
     end
 
+    context 'in the console' do
+      it 'does not show the symmetric_key' do
+        expect(new_lock.inspect).to_not match(/symmetric_key/)
+      end
+    end
+
     describe '#encrypt_to_file' do
       before :each do
         @secure_file = Pathname('/tmp/safe.spec.secure_file.txt')

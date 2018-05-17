@@ -29,7 +29,13 @@ module Sia
     #
     def initialize(password, salt, buffer_bytes, digest_iterations)
       @buffer_bytes = buffer_bytes
-      @symmetric_key = digest_password(password, salt, digest_iterations)
+
+      # Don't let the symmetric_key accidentally show up in logs or in the
+      # console. Instead of storing it in an instance variable store it in a
+      # private method.
+      key = digest_password(password, salt, digest_iterations)
+      define_singleton_method(:symmetric_key) { key }
+      self.singleton_class.send(:private, :symmetric_key)
     end
 
     # Used for encrypting the index file from memory
@@ -94,7 +100,7 @@ module Sia
 
     def basic_encrypt(clear_io, secure_io)
       cipher = new_cipher.encrypt
-      cipher.key = @symmetric_key
+      cipher.key = symmetric_key
       iv = cipher.random_iv
       cipher.iv  = iv
 
@@ -107,7 +113,7 @@ module Sia
 
     def basic_decrypt(clear_io, secure_io)
       decipher = new_cipher.decrypt
-      decipher.key = @symmetric_key
+      decipher.key = symmetric_key
       first_block = true
 
       until secure_io.eof?
