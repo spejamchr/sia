@@ -5,7 +5,7 @@ module Helpers
   end
 
   def test_dir
-    Pathname('~').expand_path / '.test_sia_safes'
+    Pathname(Dir.home) / '.test_sia_safes'
   end
 
   def def_conf
@@ -13,8 +13,12 @@ module Helpers
   end
 
   def encrypted_file_count
-    Dir[File.join(test_dir, '**', '*')].count { |f|
-      File.file?(f) && f != new_safe.index_path && f != new_safe.salt_path
+    Dir[File.join(test_dir, '**', '*')].map{ |s| Pathname(s) }.count { |f|
+      f.file? && ![
+        new_safe.index_path,
+        new_safe.salt_path,
+        Sia::PersistedConfig::PATH,
+      ].include?(f)
     }
   end
 

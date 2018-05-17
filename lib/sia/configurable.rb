@@ -57,7 +57,7 @@ module Sia::Configurable
   #     Useful if the safe will be shared.
   #
   DEFAULTS = {
-    root_dir: Pathname("~").expand_path / '.sia_safes',
+    root_dir: Pathname(Dir.home) / '.sia_safes',
     index_name: '.sia_index',
     salt_name: '.sia_salt',
     digest_iterations: 200_000,
@@ -72,10 +72,15 @@ module Sia::Configurable
   # @return [Hash]
   #
   def options
-    (@options ||= defaults).transform_values(&:dup).dup
+    (@options ||= defaults).transform_values(&:dup)
   end
 
   private
+
+  def persisted_config
+    Sia::PERSISTED_CONFIG.exist? ?
+      (YAML.load(Sia::PERSISTED_CONFIG.read) || {}) : {}
+  end
 
   def clean_options(opt)
     opt = opt.dup
@@ -151,7 +156,8 @@ module Sia::Configurable
     def portable_file(string)
       return if string =~ SAFE_PATH_REGEX
       raise Sia::Error::ConfigurationError,
-        "Filenames must match the regex #{SAFE_PATH_REGEX.inspect}, but was #{string}"
+        "Filenames must match the regex #{SAFE_PATH_REGEX.inspect}, " +
+        "but was #{string.inspect}"
     end
 
     # Make sure Sia converts each option exactly one time. Any time a new

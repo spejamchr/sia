@@ -1,11 +1,30 @@
 RSpec.describe Sia do
+  before :all do
+    if Sia::PersistedConfig::PATH.exist?
+      @original_config = Sia::PersistedConfig::PATH.read
+    end
+  end
+
+  after :each do
+    Sia::PersistedConfig::PATH.delete if Sia::PersistedConfig::PATH.exist?
+  end
+
+  after :all do
+    if @original_config
+      Sia::PersistedConfig::PATH.write(@original_config)
+    elsif Sia::PersistedConfig::PATH.exist?
+      Sia::PersistedConfig::PATH.delete
+    end
+  end
+
   it "has a version number" do
     expect(Sia::VERSION).not_to be nil
   end
 
   describe Sia::Configurable do
     after :each do
-      Sia.set_default_options!
+      Sia.set_default_options!(source: :gem)
+      Sia.persist!
     end
 
     it 'has defaults set without any configuration' do
@@ -105,6 +124,22 @@ RSpec.describe Sia do
       end
     end # describe '#config'
 
+    describe '#persist!' do
+      it 'creates the persisted config file' do
+        Sia::PersistedConfig::PATH.delete if Sia::PersistedConfig::PATH.exist?
+        Sia.persist!
+        expect(Sia::PersistedConfig::PATH).to exist
+      end
+
+      it 'saves current configuration' do
+        string = 'This_is_a_test'
+        Sia.config(index_name: string)
+        Sia.persist!
+        expect(YAML.load(Sia::PersistedConfig::PATH.read)[:sia][:index_name])
+          .to eq(string)
+      end
+    end # describe '#persist!'
+
     describe '#set_default_options!' do
       it 'resets options to default' do
         Sia.config(root_dir: '/a/b', index_name: 'c', buffer_bytes: 2)
@@ -121,7 +156,24 @@ RSpec.describe Sia do
         expect(Sia.options[:index_name]).to eq('c')
         expect(Sia.options[:buffer_bytes]).to eq(2)
       end
-    end
+
+      it 'loads persisted options' do
+        string = 'This_is_a_test'
+        Sia.config(index_name: string)
+        Sia.persist!
+        Sia.config(index_name: 'something_else')
+        Sia.set_default_options!
+        expect(Sia.options[:index_name]).to eq(string)
+      end
+
+      it 'loads persisted options from old versions' do
+        root_dir = '/a/b'
+        Sia::PersistedConfig::PATH.write(YAML.dump({ sia: { root_dir: root_dir } }))
+        Sia.set_default_options!
+        expect(Sia.options[:root_dir]).to eq(root_dir)
+        expect(Sia.options[:index_name]).to eq(def_conf[:index_name])
+      end
+    end # describe '#set_default_options!'
   end # describe Sia::Configurable
 
   describe Sia::Lock do
@@ -252,13 +304,13 @@ RSpec.describe Sia do
       it 'overrides Sia config' do
         Sia.config(buffer_bytes: 1)
         safe = new_safe(buffer_bytes: 10)
-        expect(safe.options[:buffer_bytes]).to be(10)
+        expect(safe.options[:buffer_bytes]).to eq(10)
       end
 
       it 'does not overwrite Sia config' do
         Sia.config(buffer_bytes: 1)
         new_safe(buffer_bytes: 10)
-        expect(Sia.options[:buffer_bytes]).to be(1)
+        expect(Sia.options[:buffer_bytes]).to eq(1)
       end
 
       it 'cannot be done by manipulating options' do
@@ -271,13 +323,15 @@ RSpec.describe Sia do
 
     describe 'instance methods' do
       before :each do
+        Sia.config(root_dir: test_dir, digest_iterations: 1)
         @clear_file = Pathname('/tmp/safe.spec.clear_file.txt')
         @clear_file_contents = "Some string\nwith linebreaks\nand stuff\n"
         @clear_file.write(@clear_file_contents)
       end
 
-      after :each do
-        @clear_file.delete if @clear_file.exist?
+      after :all do
+        clear_file = Pathname('/tmp/safe.spec.clear_file.txt')
+        clear_file.delete if clear_file.exist?
       end
 
       describe '#new' do
@@ -302,7 +356,7 @@ RSpec.describe Sia do
         end
 
         it 'raises exception with the wrong password if safe already exists' do
-          new_safe.close(@clear_file) # persist the good safe by using it
+          new_safe.persist!
 
           expect { new_safe(password: 'bad password') }
             .to raise_error(Sia::Error::PasswordError)
@@ -310,29 +364,86 @@ RSpec.describe Sia do
 
         it 'uses Sia config' do
           Sia.config(buffer_bytes: 1)
-          expect(new_safe.options[:buffer_bytes]).to be(1)
+          expect(new_safe.options[:buffer_bytes]).to eq(1)
         end
 
-        describe 'argument validation' do
-          it 'accepts symbols for name and password' do
-            Sia::Safe.new(name: :name, password: :password)
-          end
+        it 'accepts symbols for name and password' do
+          Sia::Safe.new(name: :name, password: :password)
         end
 
         describe 'setting options' do
+          before :each do
+            new_safe.delete
+          end
+
           it 'overrides Sia config' do
             Sia.config(buffer_bytes: 1)
             safe = new_safe(buffer_bytes: 10)
-            expect(safe.options[:buffer_bytes]).to be(10)
+            expect(safe.options[:buffer_bytes]).to eq(10)
           end
 
           it 'does not overwrite Sia config' do
             Sia.config(buffer_bytes: 1)
             new_safe(buffer_bytes: 10)
-            expect(Sia.options[:buffer_bytes]).to be(1)
+            expect(Sia.options[:buffer_bytes]).to eq(1)
+          end
+
+          it 'raises exception if opts do not match persisted config' do
+            new_safe(buffer_bytes: 10).persist!
+            expect { new_safe(buffer_bytes: 1) }
+              .to raise_error(Sia::Error::ConfigurationError)
+          end
+
+          it 'uses Sia memory config, not Sia persisted config' do
+            persisted = 1
+            memory = persisted + 1
+            Sia.config(buffer_bytes: persisted)
+            Sia.persist!
+            Sia.config(buffer_bytes: memory)
+            expect(new_safe.options[:buffer_bytes]).to eq(memory)
           end
         end # describe 'setting options'
       end # describe '#new'
+
+      describe '#persist!' do
+        it 'creates the persisted config file' do
+          expect(Sia::PersistedConfig::PATH).to_not exist
+          new_safe.persist!
+          expect(Sia::PersistedConfig::PATH).to exist
+        end
+
+        it 'creates the index file' do
+          expect(new_safe.index_path).to_not exist
+          new_safe.persist!
+          expect(new_safe.index_path).to exist
+        end
+
+        it 'encrypts the index file' do
+          new_safe.persist!
+          expect { YAML.load(new_safe.index_path.read) }
+            .to(raise_error(Psych::SyntaxError))
+        end
+
+        it 'creates the safe directory' do
+          expect(new_safe.safe_dir).to_not exist
+          new_safe.persist!
+          expect(new_safe.safe_dir).to exist
+        end
+
+        it 'creates the index entry for the safe' do
+          expect(new_safe.index).to_not have_key(:files)
+
+          new_safe.persist!
+
+          expect(new_safe.index).to have_key(:files)
+        end
+
+        it 'creates the salt file for the safe' do
+          expect(new_safe.salt_path).not_to exist
+          new_safe.persist!
+          expect(new_safe.salt_path).to exist
+        end
+      end
 
       describe '#close' do
         it 'works with string path' do
@@ -349,29 +460,11 @@ RSpec.describe Sia do
           expect(@clear_file).not_to exist
         end
 
-        it 'creates the index file' do
-          expect(new_safe.index_path).to_not exist
-          new_safe.close(@clear_file)
-          expect(new_safe.index_path).to exist
-        end
-
-        it 'encrypts the index file' do
-          new_safe.close(@clear_file)
-          expect { YAML.load(new_safe.index_path.read) }
-            .to(raise_error(Psych::SyntaxError))
-        end
-
-        it 'creates the safe directory' do
-          expect(new_safe.safe_dir).to_not exist
-          new_safe.close(@clear_file)
-          expect(new_safe.safe_dir).to exist
-        end
-
         it 'creates a new encrypted file' do
           before = encrypted_file_count
           new_safe.close(@clear_file)
           after = encrypted_file_count
-          expect(after).to be(before + 1)
+          expect(after).to eq(before + 1)
         end
 
         it 'creates the index entry for the clear file' do
@@ -389,12 +482,6 @@ RSpec.describe Sia do
           expect(c).to have_key(:secure_file)
           expect(c).to have_key(:last_closed)
           expect(c).to have_key(:safe)
-        end
-
-        it 'creates the salt file for the safe' do
-          expect(new_safe.salt_path).not_to exist
-          new_safe.close(@clear_file)
-          expect(new_safe.salt_path).to exist
         end
 
         it 'handles files with funky names' do
@@ -428,7 +515,7 @@ RSpec.describe Sia do
           before = encrypted_file_count
           new_safe.open(@clear_file)
           after = encrypted_file_count
-          expect(after).to be(before - 1)
+          expect(after).to eq(before - 1)
         end
 
         it 'decrypts the file' do
@@ -505,7 +592,7 @@ RSpec.describe Sia do
             expect(new_safe.send(:secure_filepath, filename)).to exist
           end
         end
-      end # describe '#empty'
+      end # describe '#fill'
 
       describe '#index' do
         it 'returns a hash' do
@@ -543,6 +630,12 @@ RSpec.describe Sia do
 
           after = encrypted_file_count
           expect(after).to eq(0)
+        end
+
+        it 'removes the persisted config entry' do
+          new_safe.persist!
+          new_safe.delete
+          expect(Sia::PersistedConfig.new(new_safe.name)).to_not exist
         end
       end # describe '#delete'
     end # describe 'instance methods'
@@ -620,7 +713,10 @@ RSpec.describe Sia do
         end
 
         it 'respects the extension option' do
-          new_safe.open(@in_clear_file)
+          [@in_clear_file, @out_clear_file].each do |f|
+            f.write(@clear_text)
+          end
+          new_safe.delete
 
           ext = '.some_new_extension'
           s = new_safe(extension: ext)
@@ -676,7 +772,12 @@ RSpec.describe Sia do
         end
 
         it 'does not work for files outside root dir' do
+          new_safe.delete
+
           new_safe(portable: false).close(@out_clear_file)
+
+          new_safe.delete
+
           expect { new_safe.open(@out_clear_file) }
             .to(raise_error(Sia::Error::FileOutsideScopeError))
         end

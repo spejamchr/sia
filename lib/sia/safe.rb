@@ -70,17 +70,22 @@ module Sia
 
     include Sia::Configurable
 
+    attr_reader :name
+
     # @param [#to_sym] name
     # @param [#to_s] password
-    # @param [Hash] opt Configure the safe as shown in {Configurable}.
+    # @param [Hash] opt Configure new safes as shown in {Configurable}.
+    #   When instantiating existing safes, configuration here must match the
+    #   persisted config, or be absent.
     # @return [Safe]
     #
     def initialize(name:, password:, **opt)
-      options # Initialize the options with defaults
-      @options.merge!(clean_options(opt))
-      @options.freeze
-
       @name = name.to_sym
+      @persisted_config = PersistedConfig.new(@name)
+
+      options # Initialize the options with defaults
+      assign_options(opt)
+
       @lock = Lock.new(
         password.to_s,
         salt,
@@ -92,12 +97,27 @@ module Sia
       index
     end
 
+    # Persist the safe and its configuration
+    #
+    # This doesn't have any effect once a file has been closed in the safe.
+    #
+    def persist!
+      return if @persisted_config.exist?
+
+      safe_dir.mkpath unless safe_dir.directory?
+      salt_path.write(salt) unless salt_path.file?
+
+      @persisted_config.persist(options)
+
+      update_index(:files, files)
+    end
+
     # The directory where this safe is stored
     #
     # @return [Pathname]
     #
     def safe_dir
-      options[:root_dir] / @name.to_s
+      options[:root_dir] / name.to_s
     end
 
     # The absolute path to the encrypted index file
@@ -146,7 +166,7 @@ module Sia
     def close(filename)
       clearpath = clear_filepath(filename)
       check_file_is_in_safe_dir(clearpath) if options[:portable]
-      persist_safe_dir
+      persist!
 
       @lock.encrypt(clearpath, secure_filepath(clearpath))
 
@@ -197,10 +217,14 @@ module Sia
     # the {#salt_path} in it.
     #
     def delete
+      return unless @persisted_config.exist?
+
       files.each { |_, d| d[:secure_file].delete if d[:safe] }
       index_path.delete
       salt_path.delete
       safe_dir.delete if safe_dir.empty?
+
+      @persisted_config.delete
     end
 
     private
@@ -208,14 +232,23 @@ module Sia
     # Used by Sia::Configurable
     #
     def defaults
-      Sia.options.dup
+      @persisted_config.options.dup
     end
 
-    def persist_safe_dir
-      return if @safe_dir_persisted
-      safe_dir.mkpath unless safe_dir.directory?
-      salt_path.write(salt) unless salt_path.file?
-      @safe_dir_persisted = true
+    def assign_options(opt)
+      if @persisted_config.exist?
+        news = options.merge(clean_options(opt))
+        unless options == news
+          differences = (news.to_a - options.to_a).map { |k, v|
+            ":#{k} changed from `#{options[k]}` to `#{news[k]}`"
+          }.join("\n  ")
+          raise Sia::Error::ConfigurationError,
+            "Cannot change safe configuration\n  #{differences}"
+        end
+      else
+        @options.merge!(clean_options(opt))
+      end
+      @options.freeze
     end
 
     def files
