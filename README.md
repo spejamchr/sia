@@ -1,5 +1,12 @@
 # Sia
 
+[![CircleCI](https://circleci.com/gh/spejamchr/sia.svg?style=shield)](
+https://circleci.com/gh/spejamchr/sia)
+[![GitHub](https://img.shields.io/badge/github-spejamchr/sia-blue.svg)](
+https://github.com/spejamchr/sia)
+[![Documentation](https://img.shields.io/badge/docs-rubydoc.org-blue.svg)](
+https://www.rubydoc.info/github/spejamchr/sia)
+
 Encrypt files by storing them in digital safes. Each safe has a name and a
 password and can store as many files as you want.
 
