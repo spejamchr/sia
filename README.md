@@ -2,6 +2,10 @@
 
 [![CircleCI](https://circleci.com/gh/spejamchr/sia.svg?style=shield)](
 https://circleci.com/gh/spejamchr/sia)
+[![Maintainability](https://api.codeclimate.com/v1/badges/75cf5916519ae7729bd0/maintainability)](
+https://codeclimate.com/github/spejamchr/sia/maintainability)
+[![Test Coverage](https://api.codeclimate.com/v1/badges/75cf5916519ae7729bd0/test_coverage)](
+https://codeclimate.com/github/spejamchr/sia/test_coverage)
 [![GitHub](https://img.shields.io/badge/github-spejamchr/sia-blue.svg)](
 https://github.com/spejamchr/sia)
 [![Documentation](https://img.shields.io/badge/docs-rubydoc.org-blue.svg)](
