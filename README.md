@@ -10,8 +10,8 @@ https://codeclimate.com/github/spejamchr/sia/maintainability)
 https://codeclimate.com/github/spejamchr/sia/test_coverage)
 [![GitHub](https://img.shields.io/badge/github-spejamchr/sia-blue.svg)](
 https://github.com/spejamchr/sia)
-[![Documentation](https://img.shields.io/badge/docs-rubydoc.org-blue.svg)](
-https://www.rubydoc.info/github/spejamchr/sia)
+[![Documentation](https://img.shields.io/badge/docs-rubydoc.info-blue.svg)](
+https://www.rubydoc.info/gems/sia)
 
 Encrypt files by storing them in digital safes. Each safe has a name and a
 password and can store as many files as you want.
