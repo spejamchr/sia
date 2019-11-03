@@ -14,9 +14,9 @@ module Sia
   #
   #     safe.close('~/secret.txt')
   #
-  # The file will not longer be present at `/path/to/the/secret.txt`; instead,
-  # it will now be encrypted in the default Sia directory with a new name.
-  # Restore it by using {open}.
+  # The file will no longer be present at `~/secret.txt`; instead, it will now
+  # be encrypted in the default Sia directory with a new name.  Restore it by
+  # using {open}.
   #
   #     safe.open('~/secret.txt')
   #
@@ -55,16 +55,20 @@ module Sia
   #             └── 0nxntvTLteCTZ8cmZdX848gGaYHRAOHqir-1RuJ-n-E
   #
   # The `.sia_safes/` directory holds all the safes, in this case the `test`
-  # safe. Its name and location can be customized using {Configurable}. The
-  # `test/` directory where the `test` safe lives. `.sia_index` is an encrypted
-  # file that stores information about the safe. Its name cam be customized:
-  # {Configurable}. The `.sia_salt` file stores the salt used to make a good
-  # symmetric key out of the password. Its name cam be customized:
-  # {Configurable}. The last file,
-  # `0nxntvTLteCTZ8cmZdX848gGaYHRAOHqir-1RuJ-n-E`, is the newly encrypted file.
-  # Its name is a `SHA256` digest of the full pathname of the clearfile (in this
-  # case, `"/Users/spencer/secret.txt"`) encoded in url-safe base 64 without
-  # padding (ie, not ending `'='`).
+  # safe. Its name and location can be customized using {Configurable}.
+  #
+  # The `test/` directory is where the `test` safe lives.
+  #
+  # `.sia_index` is an encrypted file that stores information about the safe.
+  # Its name cam be customized: {Configurable}.
+  #
+  # The `.sia_salt` file stores the salt used to make a good symmetric key out
+  # of the password. Its name cam be customized: {Configurable}.
+  #
+  # The last file, `0nxntvTLteCTZ8cmZdX848gGaYHRAOHqir-1RuJ-n-E`, is the newly
+  # encrypted file.  Its name is a `SHA256` digest of the full pathname of the
+  # clearfile (in this case, `"/Users/spencer/secret.txt"`) encoded in url-safe
+  # base 64 without padding (ie, not ending `'='`).
   #
   class Safe
 
@@ -263,7 +267,7 @@ module Sia
     # Generate a urlsafe filename for storage in the safe
     def digest_filename(filename)
       digest = Digest::SHA256.digest(filename.to_s)
-      filename = Base64.urlsafe_encode64(digest, padding: false)
+      Base64.urlsafe_encode64(digest, padding: false)
     end
 
     def secure_filepath(filename)
